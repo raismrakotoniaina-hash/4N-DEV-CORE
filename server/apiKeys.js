@@ -1,0 +1,54 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+
+const dataDir = path.resolve("data");
+const storePath = path.join(dataDir, "api-keys.json");
+
+function ensureStore() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  if (!fs.existsSync(storePath)) {
+    fs.writeFileSync(storePath, "[]", "utf8");
+  }
+}
+
+function readKeys() {
+  ensureStore();
+  return JSON.parse(fs.readFileSync(storePath, "utf8"));
+}
+
+function writeKeys(keys) {
+  ensureStore();
+  fs.writeFileSync(storePath, JSON.stringify(keys, null, 2), "utf8");
+}
+
+export function createApiKey({ name = "Developer", scopes = ["chat"] } = {}) {
+  const secret = crypto.randomBytes(32).toString("base64url");
+  const key = `4ndev_sk_live_${secret}`;
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
+
+  const record = {
+    id: crypto.randomUUID(),
+    name,
+    prefix: key.slice(0, 20),
+    hash,
+    scopes,
+    active: true,
+    createdAt: new Date().toISOString()
+  };
+
+  const keys = readKeys();
+  keys.push(record);
+  writeKeys(keys);
+
+  return { ...record, key };
+}
+
+export function authenticateApiKey(key) {
+  if (!key || !key.startsWith("4ndev_sk_")) return null;
+
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
+  const record = readKeys().find((item) => item.hash === hash && item.active);
+
+  return record || null;
+}
