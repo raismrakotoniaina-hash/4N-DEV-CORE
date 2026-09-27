@@ -1,5 +1,7 @@
 import fs from "fs";
 import path from "path";
+import { addCredits } from "./credits.js";
+import { getPlan } from "./plans.js";
 
 const dataDir = path.join(process.cwd(), "data");
 const filePath = path.join(dataDir, "billing.json");
@@ -126,4 +128,48 @@ export function listProviders() {
       status: "planned"
     }
   ];
+}
+
+
+export function fulfillPaidPayment(paymentId, providerReference = null) {
+  const store = readStore();
+  const payment = store.payments.find(item => item.id === paymentId);
+  if (!payment) return { success: false, error: "Payment not found" };
+
+  const order = store.orders.find(item => item.id === payment.orderId);
+  if (!order) return { success: false, error: "Order not found" };
+
+  if (payment.status === "paid" || order.status === "paid") {
+    return {
+      success: true,
+      alreadyFulfilled: true,
+      payment,
+      order
+    };
+  }
+
+  const plan = getPlan(order.planId);
+  if (!plan || !Number.isInteger(plan.credits) || plan.credits <= 0) {
+    return { success: false, error: "Invalid plan credits" };
+  }
+
+  payment.status = "paid";
+  payment.providerReference = providerReference || payment.providerReference;
+  payment.updatedAt = new Date().toISOString();
+
+  order.status = "paid";
+  order.updatedAt = new Date().toISOString();
+
+  writeStore(store);
+
+  const balance = addCredits(order.apiKeyId, plan.credits, `payment_${payment.provider}`);
+
+  return {
+    success: true,
+    alreadyFulfilled: false,
+    payment,
+    order,
+    creditsAdded: plan.credits,
+    balance
+  };
 }
