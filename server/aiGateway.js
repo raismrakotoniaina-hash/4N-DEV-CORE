@@ -72,6 +72,55 @@ export async function generateEmbedding(input) {
   };
 }
 
+export async function generateBuilderResponse({ prompt, project = null }) {
+  const instructions = `You are the 4N DEV AI Builder engine.
+Generate a small, runnable web project from the user's request.
+Return ONLY valid JSON with this exact shape:
+{
+  "name": "Project name",
+  "description": "Short description",
+  "summary": "What was generated",
+  "files": [
+    { "path": "index.html", "content": "..." }
+  ]
+}
+Rules:
+- Generate complete file contents, not placeholders.
+- Use relative paths only.
+- Prefer a simple static HTML/CSS/JS project unless the user explicitly asks for another stack.
+- Keep the project focused and runnable.
+- Do not include markdown fences or any text outside the JSON.
+User request:
+${prompt}
+Existing project:
+${project ? JSON.stringify(project) : "none"}`;
+
+  const data = await openAIRequest(OPENAI_RESPONSES_URL, {
+    model: DEFAULT_MODEL,
+    input: [{ role: "user", content: [{ type: "input_text", text: instructions }] }],
+    max_output_tokens: 8000
+  });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(data.output_text || "{}");
+  } catch {
+    const error = new Error("Builder returned invalid JSON");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    model: data.model,
+    name: parsed.name || "AI Builder Project",
+    description: parsed.description || "",
+    summary: parsed.summary || "",
+    files: parsed.files || [],
+    usage: data.usage || null
+  };
+}
+
 export async function generateImage(prompt, quality) {
   const data = await openAIRequest(OPENAI_IMAGES_URL, { model: IMAGE_MODEL, prompt, quality });
   const imageData = data?.data?.[0];
