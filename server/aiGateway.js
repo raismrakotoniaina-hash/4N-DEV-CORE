@@ -1,5 +1,7 @@
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations";
+const OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
+const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
 
@@ -55,6 +57,19 @@ export async function generateCodingResponse(input) {
   });
 
   return { id: data.id, model: data.model, text: data.output_text || "", usage: data.usage || null };
+}
+
+export async function generateEmbedding(input) {
+  const data = await openAIRequest(OPENAI_EMBEDDINGS_URL, {
+    model: EMBEDDING_MODEL,
+    input
+  });
+
+  return {
+    model: data.model || EMBEDDING_MODEL,
+    embeddings: data.data || [],
+    usage: data.usage || null
+  };
 }
 
 export async function generateImage(prompt, quality) {
