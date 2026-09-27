@@ -22,7 +22,11 @@ function writeKeys(keys) {
   fs.writeFileSync(storePath, JSON.stringify(keys, null, 2), "utf8");
 }
 
-export function createApiKey({ name = "Developer", scopes = ["chat"] } = {}) {
+export function createApiKey({
+  name = "Developer",
+  scopes = ["chat"],
+  planId = "free"
+} = {}) {
   const secret = crypto.randomBytes(32).toString("base64url");
   const key = `4ndev_sk_live_${secret}`;
   const hash = crypto.createHash("sha256").update(key).digest("hex");
@@ -30,6 +34,7 @@ export function createApiKey({ name = "Developer", scopes = ["chat"] } = {}) {
   const record = {
     id: crypto.randomUUID(),
     name,
+    planId,
     prefix: key.slice(0, 20),
     hash,
     scopes,
@@ -48,7 +53,9 @@ export function authenticateApiKey(key) {
   if (!key || !key.startsWith("4ndev_sk_")) return null;
 
   const hash = crypto.createHash("sha256").update(key).digest("hex");
-  const record = readKeys().find((item) => item.hash === hash && item.active);
+  const record = readKeys().find(
+    (item) => item.hash === hash && item.active
+  );
 
   return record || null;
 }
