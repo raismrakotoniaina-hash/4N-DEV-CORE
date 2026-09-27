@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { createApiKey } from "./apiKeys.js";
+import { addCredits } from "./credits.js";
 import { requireApiKey } from "./middleware/apiKey.js";
 import chatRouter from "./routes/chat.js";
 import creditsRouter from "./routes/credits.js";
@@ -61,11 +62,26 @@ app.post("/v1/keys", (req, res) => {
     });
   }
 
-  const { name, scopes } = req.body || {};
+  const { name, scopes, planId } = req.body || {};
+  const selectedPlan = ["free", "starter", "pro", "premium"].includes(planId)
+    ? planId
+    : "free";
+
   const apiKey = createApiKey({
     name: typeof name === "string" && name.trim() ? name.trim() : "Developer",
-    scopes: Array.isArray(scopes) && scopes.length ? scopes : ["chat"]
+    scopes: Array.isArray(scopes) && scopes.length ? scopes : ["chat"],
+    planId: selectedPlan
   });
+
+  const initialCredits = selectedPlan === "free"
+    ? 10
+    : selectedPlan === "starter"
+      ? 100
+      : selectedPlan === "pro"
+        ? 500
+        : 2000;
+
+  addCredits(apiKey.id, initialCredits, `plan_${selectedPlan}`);
 
   res.status(201).json({
     success: true,
@@ -73,6 +89,8 @@ app.post("/v1/keys", (req, res) => {
     api_key: apiKey.key,
     id: apiKey.id,
     name: apiKey.name,
+    plan: selectedPlan,
+    credits: initialCredits,
     scopes: apiKey.scopes,
     createdAt: apiKey.createdAt
   });
@@ -84,6 +102,7 @@ app.get("/v1/me", requireApiKey, (req, res) => {
     developer: {
       id: req.apiKey.id,
       name: req.apiKey.name,
+      plan: req.apiKey.planId || "free",
       scopes: req.apiKey.scopes,
       active: req.apiKey.active,
       createdAt: req.apiKey.createdAt
