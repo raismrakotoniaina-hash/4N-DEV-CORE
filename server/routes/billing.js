@@ -34,14 +34,29 @@ router.post("/webhooks/:provider", (req, res) => {
   }
 
   const provider = req.params.provider.toLowerCase();
-  if (!["papi", "international"].includes(provider)) {
+  const adapter = getPaymentProvider(provider);
+
+  if (!adapter) {
     return res.status(400).json({
       success: false,
       error: "Unsupported payment provider"
     });
   }
 
-  const { paymentId, providerReference, status } = req.body || {};
+  if (!adapter.isConfigured()) {
+    return res.status(503).json({
+      success: false,
+      error: `${adapter.name} provider is not configured`
+    });
+  }
+
+  const verification = await adapter.verifyWebhook(req);
+
+  if (!verification.success) {
+    return res.status(403).json(verification);
+  }
+
+  const { paymentId, providerReference, status } = verification;
 
   if (status !== "paid" || typeof paymentId !== "string") {
     return res.status(400).json({
@@ -85,7 +100,7 @@ router.get("/plans", (_req, res) => {
 router.get("/providers", (_req, res) => {
   res.json({
     success: true,
-    providers: listProviders()
+    providers: listPaymentProviders()
   });
 });
 
@@ -158,7 +173,9 @@ router.post("/orders/:orderId/payments", (req, res) => {
     ? req.body.provider.trim().toLowerCase()
     : "";
 
-  if (!["papi", "international"].includes(provider)) {
+  const adapter = getPaymentProvider(provider);
+
+  if (!adapter) {
     return res.status(400).json({
       success: false,
       error: "Unsupported payment provider"
@@ -166,10 +183,72 @@ router.post("/orders/:orderId/payments", (req, res) => {
   }
 
   const payment = createPayment(order.id, provider);
+
   res.status(201).json({
     success: true,
     payment,
-    message: "Payment created. Awaiting verified provider webhook."
+    provider: {
+      id: adapter.id,
+      name: adapter.name,
+      configured: adapter.isConfigured()
+    },
+    message: adapter.isConfigured()
+      ? "Payment created. Use the checkout endpoint to start provider payment."
+      : "Payment created, but this provider is not configured yet."
+  });
+});
+
+
+router.post("/orders/:orderId/checkout", async (req, res) => {
+  const order = getOrder(req.apiKey.id, req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({
+      success: false,
+      error: "Order not found"
+    });
+  }
+
+  if (order.status !== "pending") {
+    return res.status(400).json({
+      success: false,
+      error: "Order is not payable"
+    });
+  }
+
+  const provider = typeof req.body?.provider === "string"
+    ? req.body.provider.trim().toLowerCase()
+    : "";
+
+  const adapter = getPaymentProvider(provider);
+
+  if (!adapter) {
+    return res.status(400).json({
+      success: false,
+      error: "Unsupported payment provider"
+    });
+  }
+
+  if (!adapter.isConfigured()) {
+    return res.status(503).json({
+      success: false,
+      error: `${adapter.name} provider is not configured yet`,
+      provider: adapter.id
+    });
+  }
+
+  const payment = createPayment(order.id, provider);
+  const checkoutResult = await adapter.createCheckout({ order, payment });
+
+  if (!checkoutResult.success) {
+    return res.status(502).json(checkoutResult);
+  }
+
+  res.status(201).json({
+    success: true,
+    provider: adapter.id,
+    payment,
+    checkout: checkoutResult.checkout || null
   });
 });
 
