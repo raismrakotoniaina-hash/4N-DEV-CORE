@@ -1,12 +1,42 @@
+import crypto from "crypto";
 import { getPayment } from "../billing.js";
 
 const PAPI_API_URL = process.env.PAPI_API_URL || "https://app.papi.mg/engine/api/payment-links";
+const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 function notConfigured() {
   return {
     success: false,
     error: "PAPI provider is not configured yet"
   };
+}
+
+function verifySignature(rawBody, header, secret) {
+  if (!Buffer.isBuffer(rawBody) || !header || !secret) return false;
+
+  const parts = {};
+  for (const item of header.split(",")) {
+    const [key, ...rest] = item.trim().split("=");
+    parts[key] = rest.join("=");
+  }
+
+  const { t, v1 } = parts;
+  if (!/^\d+$/.test(t || "") || !/^[0-9a-f]{64}$/.test(v1 || "")) {
+    return false;
+  }
+
+  if (Math.abs(Math.floor(Date.now() / 1000) - Number(t)) > SIGNATURE_TOLERANCE_SECONDS) {
+    return false;
+  }
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${t}.`)
+    .update(rawBody)
+    .digest();
+
+  const received = Buffer.from(v1, "hex");
+  return received.length === expected.length && crypto.timingSafeEqual(expected, received);
 }
 
 export default {
@@ -17,11 +47,11 @@ export default {
   status: "available",
 
   isConfigured() {
-    return Boolean(process.env.PAPI_API_KEY);
+    return Boolean(process.env.PAPI_API_KEY && process.env.PAPI_WEBHOOK_SECRET);
   },
 
   async createCheckout({ order, payment }) {
-    if (!process.env.PAPI_API_KEY) return notConfigured();
+    if (!this.isConfigured()) return notConfigured();
 
     const baseUrl = process.env.PUBLIC_API_URL;
     const successUrl = process.env.PAPI_SUCCESS_URL || (baseUrl ? `${baseUrl}/payment/success` : null);
@@ -50,7 +80,8 @@ export default {
         successUrl,
         failureUrl,
         notificationUrl,
-        validDuration: 60,
+        validDuration: 1,
+        testReason: process.env.PAPI_TEST_MODE === "true" ? "4N DEV Core integration test" : undefined,
         isTestMode: process.env.PAPI_TEST_MODE === "true"
       })
     });
@@ -60,11 +91,11 @@ export default {
     if (!response.ok) {
       return {
         success: false,
-        error: data?.error?.message || data?.message || data?.error || "PAPI payment link creation failed"
+        error: data?.error?.message || data?.message || "PAPI payment link creation failed"
       };
     }
 
-    const result = data?.data || {};
+    const result = data?.data || data;
 
     return {
       success: true,
@@ -78,9 +109,17 @@ export default {
   },
 
   async verifyWebhook(req) {
-    const body = req.body || {};
-    const paymentId = body.paymentReference;
+    const secret = process.env.PAPI_WEBHOOK_SECRET;
+    if (!secret) return notConfigured();
 
+    if (!verifySignature(req.rawBody, req.get("X-Papi-Signature"), secret)) {
+      return {
+        success: false,
+        error: "Invalid PAPI notification signature"
+      };
+    }
+
+    const body = req.body || {};
     if (body.paymentStatus !== "SUCCESS") {
       return {
         success: false,
@@ -88,26 +127,19 @@ export default {
       };
     }
 
+    const paymentId = body.merchantPaymentReference;
     if (typeof paymentId !== "string") {
       return {
         success: false,
-        error: "Missing PAPI payment reference"
+        error: "Missing PAPI merchant payment reference"
       };
     }
 
     const payment = getPayment(paymentId);
-
     if (!payment || payment.provider !== "papi") {
       return {
         success: false,
-        error: "Unknown PAPI payment reference"
-      };
-    }
-
-    if (!payment.notificationToken) {
-      return {
-        success: false,
-        error: "PAPI notification token is missing"
+        error: "Unknown PAPI merchant payment reference"
       };
     }
 
