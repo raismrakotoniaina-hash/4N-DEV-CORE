@@ -1,3 +1,5 @@
+import { getPayment } from "../billing.js";
+
 const PAPI_API_URL = process.env.PAPI_API_URL || "https://app.papi.mg/engine/api/payment-links";
 
 function notConfigured() {
@@ -13,6 +15,7 @@ export default {
   type: "local",
   currencies: ["MGA"],
   status: "available",
+
   isConfigured() {
     return Boolean(process.env.PAPI_API_KEY);
   },
@@ -57,23 +60,26 @@ export default {
     if (!response.ok) {
       return {
         success: false,
-        error: data?.message || data?.error || "PAPI payment link creation failed"
+        error: data?.error?.message || data?.message || data?.error || "PAPI payment link creation failed"
       };
     }
+
+    const result = data?.data || {};
 
     return {
       success: true,
       checkout: {
-        paymentLink: data?.data?.paymentLink || null,
-        shortLink: data?.data?.shortLink || null,
-        providerReference: data?.data?.paymentReference || null,
-        notificationToken: data?.data?.notificationToken || null
+        paymentLink: result.paymentLink || null,
+        shortLink: result.shortLink || null,
+        providerReference: result.paymentReference || payment.id,
+        notificationToken: result.notificationToken || null
       }
     };
   },
 
   async verifyWebhook(req) {
     const body = req.body || {};
+    const paymentId = body.paymentReference;
 
     if (body.paymentStatus !== "SUCCESS") {
       return {
@@ -82,17 +88,43 @@ export default {
       };
     }
 
-    if (typeof body.merchantPaymentReference !== "string") {
+    if (typeof paymentId !== "string") {
       return {
         success: false,
-        error: "Missing PAPI merchant payment reference"
+        error: "Missing PAPI payment reference"
+      };
+    }
+
+    const payment = getPayment(paymentId);
+
+    if (!payment || payment.provider !== "papi") {
+      return {
+        success: false,
+        error: "Unknown PAPI payment reference"
+      };
+    }
+
+    if (!payment.notificationToken) {
+      return {
+        success: false,
+        error: "PAPI notification token is missing"
+      };
+    }
+
+    if (
+      typeof body.notificationToken !== "string" ||
+      body.notificationToken !== payment.notificationToken
+    ) {
+      return {
+        success: false,
+        error: "Invalid PAPI notification token"
       };
     }
 
     return {
       success: true,
       status: "paid",
-      paymentId: body.merchantPaymentReference,
+      paymentId,
       providerReference: body.paymentReference || null
     };
   }
