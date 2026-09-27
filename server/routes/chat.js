@@ -2,9 +2,12 @@ import express from "express";
 import { requireApiKey } from "../middleware/apiKey.js";
 import { generateChatResponse } from "../aiGateway.js";
 import { recordUsage } from "../usage.js";
-import { getBalance, spendCredits, calculateChatCredits } from "../credits.js";
+import { getBalance, spendCredits } from "../credits.js";
+import { getServicePrice, getServiceLimit } from "../creditPolicy.js";
 
 const router = express.Router();
+const CHAT_COST = getServicePrice("chat");
+const CHAT_LIMITS = getServiceLimit("chat");
 
 router.post("/chat", requireApiKey("chat"), async (req, res) => {
   try {
@@ -17,31 +20,38 @@ router.post("/chat", requireApiKey("chat"), async (req, res) => {
       });
     }
 
+    const inputLength = typeof input === "string"
+      ? input.length
+      : JSON.stringify(input).length;
+
+    if (inputLength > CHAT_LIMITS.maxInputCharacters) {
+      return res.status(413).json({
+        success: false,
+        error: "Chat input is too large",
+        max_characters: CHAT_LIMITS.maxInputCharacters
+      });
+    }
+
     const balanceBefore = getBalance(req.apiKey.id);
 
-    if (balanceBefore < 1) {
+    if (balanceBefore < CHAT_COST) {
       return res.status(402).json({
         success: false,
         error: "Insufficient 4N DEV credits",
-        credits: balanceBefore
+        credits: balanceBefore,
+        credits_required: CHAT_COST
       });
     }
 
     const result = await generateChatResponse(input);
-    const creditsUsed = calculateChatCredits(result.usage);
-
-    const balanceAfter = spendCredits(
-      req.apiKey.id,
-      creditsUsed,
-      "chat_usage"
-    );
+    const balanceAfter = spendCredits(req.apiKey.id, CHAT_COST, "chat_usage");
 
     if (balanceAfter === null) {
       return res.status(402).json({
         success: false,
-        error: "Insufficient 4N DEV credits for this request",
-        credits_required: creditsUsed,
-        credits: balanceBefore
+        error: "Insufficient 4N DEV credits",
+        credits: balanceBefore,
+        credits_required: CHAT_COST
       });
     }
 
@@ -50,7 +60,7 @@ router.post("/chat", requireApiKey("chat"), async (req, res) => {
       endpoint: "/v1/chat",
       usage: {
         ...result.usage,
-        credits_used: creditsUsed,
+        credits_used: CHAT_COST,
         credits_remaining: balanceAfter
       }
     });
@@ -61,7 +71,7 @@ router.post("/chat", requireApiKey("chat"), async (req, res) => {
       model: result.model,
       output: result.text,
       usage: result.usage,
-      credits_used: creditsUsed,
+      credits_used: CHAT_COST,
       credits_remaining: balanceAfter
     });
   } catch (error) {
