@@ -28,7 +28,9 @@ export function getBalance(apiKeyId) {
 }
 
 export function addCredits(apiKeyId, amount, reason = "top_up") {
-  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Invalid credit amount");
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("Invalid credit amount");
+  }
 
   const accounts = read(creditsPath);
   let account = accounts.find((item) => item.apiKeyId === apiKeyId);
@@ -57,7 +59,9 @@ export function addCredits(apiKeyId, amount, reason = "top_up") {
 }
 
 export function spendCredits(apiKeyId, amount, reason = "api_usage") {
-  if (!Number.isInteger(amount) || amount <= 0) throw new Error("Invalid credit amount");
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("Invalid credit amount");
+  }
 
   const accounts = read(creditsPath);
   const account = accounts.find((item) => item.apiKeyId === apiKeyId);
@@ -80,4 +84,14 @@ export function spendCredits(apiKeyId, amount, reason = "api_usage") {
   write(transactionsPath, transactions);
 
   return account.balance;
+}
+
+export function calculateChatCredits(usage = {}) {
+  const input = Number(usage.input_tokens || 0);
+  const output = Number(usage.output_tokens || 0);
+
+  // 1 credit = 1,000 weighted token units.
+  // Output is weighted 3x to protect 4N DEV margin.
+  const units = input + output * 3;
+  return Math.max(1, Math.ceil(units / 1000));
 }
