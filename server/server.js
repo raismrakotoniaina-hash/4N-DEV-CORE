@@ -9,6 +9,7 @@ import { getPlan } from "./plans.js";
 import chatRouter from "./routes/chat.js";
 import codingRouter from "./routes/coding.js";
 import imageRouter from "./routes/image.js";
+import embeddingsRouter from "./routes/embeddings.js";
 import creditsRouter from "./routes/credits.js";
 import plansRouter from "./routes/plans.js";
 import creditPolicyRouter from "./routes/creditPolicy.js";
@@ -91,6 +92,7 @@ app.get("/v1/me", requireApiKey, (req, res) => {
 app.use("/v1", chatRouter);
 app.use("/v1", codingRouter);
 app.use("/v1", imageRouter);
+app.use("/v1", embeddingsRouter);
 app.use("/v1", creditsRouter);
 app.use("/v1", plansRouter);
 app.use("/v1", creditPolicyRouter);
