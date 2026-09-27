@@ -1,17 +1,15 @@
 import express from "express";
 import { requireApiKey } from "../middleware/apiKey.js";
 import { generateChatResponse } from "../aiGateway.js";
+import { recordUsage } from "../usage.js";
 
 const router = express.Router();
 
-router.post("/chat", requireApiKey, async (req, res) => {
+router.post("/chat", requireApiKey("chat"), async (req, res) => {
   try {
     const { input } = req.body || {};
 
-    if (
-      typeof input !== "string" &&
-      !Array.isArray(input)
-    ) {
+    if (typeof input !== "string" && !Array.isArray(input)) {
       return res.status(400).json({
         success: false,
         error: "input must be a string or an array"
@@ -19,6 +17,12 @@ router.post("/chat", requireApiKey, async (req, res) => {
     }
 
     const result = await generateChatResponse(input);
+
+    recordUsage({
+      apiKeyId: req.apiKey.id,
+      endpoint: "/v1/chat",
+      usage: result.usage
+    });
 
     res.json({
       success: true,
