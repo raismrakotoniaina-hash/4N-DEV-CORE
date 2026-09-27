@@ -17,6 +17,11 @@ const SERVICE_PRICING = {
   embeddings: {
     credits: 1,
     maxInputCharacters: 20000
+  },
+  builder: {
+    credits: 10,
+    maxInputCharacters: 24000,
+    maxFiles: 40
   }
 };
 
