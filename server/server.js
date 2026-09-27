@@ -15,6 +15,7 @@ import plansRouter from "./routes/plans.js";
 import creditPolicyRouter from "./routes/creditPolicy.js";
 import projectsRouter from "./routes/projects.js";
 import filesRouter from "./routes/files.js";
+import builderRouter from "./routes/builder.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -100,6 +101,7 @@ app.use("/v1", plansRouter);
 app.use("/v1", creditPolicyRouter);
 app.use("/v1/projects", projectsRouter);
 app.use("/v1", filesRouter);
+app.use("/v1", builderRouter);
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`4N DEV Core API running on port ${PORT}`);
