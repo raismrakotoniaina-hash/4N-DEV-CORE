@@ -1,6 +1,6 @@
 import express from "express";
 import { requireApiKey } from "../middleware/apiKey.js";
-import { getPlan } from "../plans.js";
+import { getPlan, getPlanPrice } from "../plans.js";
 import {
   createOrder,
   getOrder,
@@ -115,11 +115,19 @@ router.post("/orders", (req, res) => {
     });
   }
 
+  const amount = getPlanPrice(plan.id, currency);
+  if (amount === null) {
+    return res.status(400).json({
+      success: false,
+      error: "Currency is not configured for this plan"
+    });
+  }
+
   const order = createOrder(
     req.apiKey.id,
     plan.id,
     currency,
-    plan.priceMGA
+    amount
   );
 
   res.status(201).json({
