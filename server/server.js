@@ -3,9 +3,12 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { createApiKey } from "./apiKeys.js";
-import { addCredits } from "./credits.js";
+import { addCredits, getBalance } from "./credits.js";
 import { requireApiKey } from "./middleware/apiKey.js";
+import { getPlan } from "./plans.js";
 import chatRouter from "./routes/chat.js";
+import codingRouter from "./routes/coding.js";
+import imageRouter from "./routes/image.js";
 import creditsRouter from "./routes/credits.js";
 import plansRouter from "./routes/plans.js";
 import creditPolicyRouter from "./routes/creditPolicy.js";
@@ -18,29 +21,14 @@ app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({
-    success: true,
-    name: "4N DEV Core API",
-    status: "online",
-    version: "0.1.0"
-  });
+  res.json({ success: true, name: "4N DEV Core API", status: "online", version: "0.1.0" });
 });
 
 app.get("/v1", (_req, res) => {
   res.json({
     name: "4N DEV API",
     version: "v1",
-    endpoints: [
-      "/v1/chat",
-      "/v1/credits",
-      "/v1/plans",
-      "/v1/credit-policy",
-      "/v1/coding",
-      "/v1/image",
-      "/v1/embeddings",
-      "/v1/projects",
-      "/v1/files"
-    ]
+    endpoints: ["/v1/chat", "/v1/coding", "/v1/image", "/v1/credits", "/v1/plans", "/v1/credit-policy", "/v1/embeddings", "/v1/projects", "/v1/files"]
   });
 });
 
@@ -49,39 +37,25 @@ app.post("/v1/keys", (req, res) => {
   const suppliedSecret = req.get("x-core-admin-secret");
 
   if (!adminSecret || adminSecret === "change-this-before-use") {
-    return res.status(503).json({
-      success: false,
-      error: "CORE_ADMIN_SECRET is not configured"
-    });
+    return res.status(503).json({ success: false, error: "CORE_ADMIN_SECRET is not configured" });
   }
 
   if (!suppliedSecret || suppliedSecret !== adminSecret) {
-    return res.status(403).json({
-      success: false,
-      error: "Forbidden"
-    });
+    return res.status(403).json({ success: false, error: "Forbidden" });
   }
 
   const { name, scopes, planId } = req.body || {};
-  const selectedPlan = ["free", "starter", "pro", "premium"].includes(planId)
-    ? planId
-    : "free";
+  const selectedPlan = getPlan(["free", "starter", "pro", "premium"].includes(planId) ? planId : "free");
+  const allowedScopes = ["chat", "coding", "image", "embeddings"];
+  const defaultScopes = selectedPlan.features.filter((feature) => allowedScopes.includes(feature));
 
   const apiKey = createApiKey({
     name: typeof name === "string" && name.trim() ? name.trim() : "Developer",
-    scopes: Array.isArray(scopes) && scopes.length ? scopes : ["chat"],
-    planId: selectedPlan
+    scopes: Array.isArray(scopes) && scopes.length ? scopes : defaultScopes,
+    planId: selectedPlan.id
   });
 
-  const initialCredits = selectedPlan === "free"
-    ? 10
-    : selectedPlan === "starter"
-      ? 100
-      : selectedPlan === "pro"
-        ? 500
-        : 2000;
-
-  addCredits(apiKey.id, initialCredits, `plan_${selectedPlan}`);
+  addCredits(apiKey.id, selectedPlan.credits, `plan_${selectedPlan.id}`);
 
   res.status(201).json({
     success: true,
@@ -89,21 +63,25 @@ app.post("/v1/keys", (req, res) => {
     api_key: apiKey.key,
     id: apiKey.id,
     name: apiKey.name,
-    plan: selectedPlan,
-    credits: initialCredits,
+    plan: selectedPlan.id,
+    credits: selectedPlan.credits,
     scopes: apiKey.scopes,
+    features: selectedPlan.features,
     createdAt: apiKey.createdAt
   });
 });
 
 app.get("/v1/me", requireApiKey, (req, res) => {
+  const plan = getPlan(req.apiKey.planId || "free");
   res.json({
     success: true,
     developer: {
       id: req.apiKey.id,
       name: req.apiKey.name,
-      plan: req.apiKey.planId || "free",
+      plan: plan?.id || "free",
+      features: plan?.features || [],
       scopes: req.apiKey.scopes,
+      credits: getBalance(req.apiKey.id),
       active: req.apiKey.active,
       createdAt: req.apiKey.createdAt
     }
@@ -111,6 +89,8 @@ app.get("/v1/me", requireApiKey, (req, res) => {
 });
 
 app.use("/v1", chatRouter);
+app.use("/v1", codingRouter);
+app.use("/v1", imageRouter);
 app.use("/v1", creditsRouter);
 app.use("/v1", plansRouter);
 app.use("/v1", creditPolicyRouter);
