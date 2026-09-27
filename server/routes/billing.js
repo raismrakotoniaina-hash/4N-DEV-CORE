@@ -9,10 +9,63 @@ import {
   getPayment,
   updatePayment,
   updateOrder,
-  listProviders
+  listProviders,
+  fulfillPaidPayment
 } from "../billing.js";
 
 const router = express.Router();
+
+router.post("/webhooks/:provider", (req, res) => {
+  const secret = process.env.CORE_PAYMENT_WEBHOOK_SECRET;
+  const supplied = req.get("x-4ndev-webhook-secret");
+
+  if (!secret || secret === "change-this-before-use") {
+    return res.status(503).json({
+      success: false,
+      error: "CORE_PAYMENT_WEBHOOK_SECRET is not configured"
+    });
+  }
+
+  if (!supplied || supplied !== secret) {
+    return res.status(403).json({
+      success: false,
+      error: "Invalid webhook secret"
+    });
+  }
+
+  const provider = req.params.provider.toLowerCase();
+  if (!["papi", "international"].includes(provider)) {
+    return res.status(400).json({
+      success: false,
+      error: "Unsupported payment provider"
+    });
+  }
+
+  const { paymentId, providerReference, status } = req.body || {};
+
+  if (status !== "paid" || typeof paymentId !== "string") {
+    return res.status(400).json({
+      success: false,
+      error: "A verified paid event with paymentId is required"
+    });
+  }
+
+  const result = fulfillPaidPayment(paymentId, providerReference);
+
+  if (!result.success) {
+    return res.status(404).json(result);
+  }
+
+  res.json({
+    success: true,
+    provider,
+    already_fulfilled: result.alreadyFulfilled,
+    payment: result.payment,
+    order: result.order,
+    credits_added: result.creditsAdded || 0,
+    credits_balance: result.balance ?? null
+  });
+});
 
 router.use(requireApiKey());
 
@@ -133,12 +186,5 @@ router.get("/payments/:paymentId", (req, res) => {
   res.json({ success: true, payment, order });
 });
 
-router.post("/webhooks/:provider", (req, res) => {
-  return res.status(501).json({
-    success: false,
-    error: "Payment webhook provider is not configured yet",
-    provider: req.params.provider
-  });
-});
 
 export default router;
