@@ -23,7 +23,7 @@ const PORT = Number(process.env.PORT || 3001);
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({\n  limit: "2mb",\n  verify: (req, _res, buffer) => {\n    req.rawBody = Buffer.from(buffer);\n  }\n}));
 
 app.get("/health", (_req, res) => {
   res.json({ success: true, name: "4N DEV Core API", status: "online", version: "0.1.0" });
