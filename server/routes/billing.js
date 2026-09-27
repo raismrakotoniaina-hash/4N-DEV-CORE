@@ -244,11 +244,21 @@ router.post("/orders/:orderId/checkout", async (req, res) => {
     return res.status(502).json(checkoutResult);
   }
 
+  const checkout = checkoutResult.checkout || null;
+
+  if (checkout) {
+    updatePayment(payment.id, {
+      providerReference: checkout.providerReference || payment.providerReference,
+      notificationToken: checkout.notificationToken || null,
+      checkoutUrl: checkout.paymentLink || checkout.shortLink || null
+    });
+  }
+
   res.status(201).json({
     success: true,
     provider: adapter.id,
-    payment,
-    checkout: checkoutResult.checkout || null
+    payment: getPayment(payment.id),
+    checkout
   });
 });
 
