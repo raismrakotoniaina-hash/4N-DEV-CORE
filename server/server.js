@@ -4,6 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { createApiKey } from "./apiKeys.js";
 import { requireApiKey } from "./middleware/apiKey.js";
+import chatRouter from "./routes/chat.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -83,6 +84,8 @@ app.get("/v1/me", requireApiKey, (req, res) => {
     }
   });
 });
+
+app.use("/v1", chatRouter);
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`4N DEV Core API running on port ${PORT}`);
