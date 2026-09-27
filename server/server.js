@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import { createApiKey } from "./apiKeys.js";
+import { requireApiKey } from "./middleware/apiKey.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -31,6 +33,54 @@ app.get("/v1", (_req, res) => {
       "/v1/projects",
       "/v1/files"
     ]
+  });
+});
+
+app.post("/v1/keys", (req, res) => {
+  const adminSecret = process.env.CORE_ADMIN_SECRET;
+  const suppliedSecret = req.get("x-core-admin-secret");
+
+  if (!adminSecret || adminSecret === "change-this-before-use") {
+    return res.status(503).json({
+      success: false,
+      error: "CORE_ADMIN_SECRET is not configured"
+    });
+  }
+
+  if (!suppliedSecret || suppliedSecret !== adminSecret) {
+    return res.status(403).json({
+      success: false,
+      error: "Forbidden"
+    });
+  }
+
+  const { name, scopes } = req.body || {};
+  const apiKey = createApiKey({
+    name: typeof name === "string" && name.trim() ? name.trim() : "Developer",
+    scopes: Array.isArray(scopes) && scopes.length ? scopes : ["chat"]
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Store this API key securely. It will not be returned again.",
+    api_key: apiKey.key,
+    id: apiKey.id,
+    name: apiKey.name,
+    scopes: apiKey.scopes,
+    createdAt: apiKey.createdAt
+  });
+});
+
+app.get("/v1/me", requireApiKey, (req, res) => {
+  res.json({
+    success: true,
+    developer: {
+      id: req.apiKey.id,
+      name: req.apiKey.name,
+      scopes: req.apiKey.scopes,
+      active: req.apiKey.active,
+      createdAt: req.apiKey.createdAt
+    }
   });
 });
 
