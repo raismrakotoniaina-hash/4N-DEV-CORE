@@ -15,24 +15,7 @@ import {
 
 const router = express.Router();
 
-router.post("/webhooks/:provider", (req, res) => {
-  const secret = process.env.CORE_PAYMENT_WEBHOOK_SECRET;
-  const supplied = req.get("x-4ndev-webhook-secret");
-
-  if (!secret || secret === "change-this-before-use") {
-    return res.status(503).json({
-      success: false,
-      error: "CORE_PAYMENT_WEBHOOK_SECRET is not configured"
-    });
-  }
-
-  if (!supplied || supplied !== secret) {
-    return res.status(403).json({
-      success: false,
-      error: "Invalid webhook secret"
-    });
-  }
-
+router.post("/webhooks/:provider", async (req, res) => {
   const provider = req.params.provider.toLowerCase();
   const adapter = getPaymentProvider(provider);
 
@@ -50,36 +33,37 @@ router.post("/webhooks/:provider", (req, res) => {
     });
   }
 
-  const verification = await adapter.verifyWebhook(req);
+  try {
+    const verification = await adapter.verifyWebhook(req);
 
-  if (!verification.success) {
-    return res.status(403).json(verification);
-  }
+    if (!verification.success) {
+      return res.status(403).json(verification);
+    }
 
-  const { paymentId, providerReference, status } = verification;
+    const result = fulfillPaidPayment(
+      verification.paymentId,
+      verification.providerReference
+    );
 
-  if (status !== "paid" || typeof paymentId !== "string") {
-    return res.status(400).json({
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.json({
+      success: true,
+      provider,
+      already_fulfilled: result.alreadyFulfilled,
+      payment: result.payment,
+      order: result.order,
+      credits_added: result.creditsAdded || 0,
+      credits_balance: result.balance ?? null
+    });
+  } catch (error) {
+    res.status(502).json({
       success: false,
-      error: "A verified paid event with paymentId is required"
+      error: error?.message || "Payment provider webhook verification failed"
     });
   }
-
-  const result = fulfillPaidPayment(paymentId, providerReference);
-
-  if (!result.success) {
-    return res.status(404).json(result);
-  }
-
-  res.json({
-    success: true,
-    provider,
-    already_fulfilled: result.alreadyFulfilled,
-    payment: result.payment,
-    order: result.order,
-    credits_added: result.creditsAdded || 0,
-    credits_balance: result.balance ?? null
-  });
 });
 
 router.use(requireApiKey());
