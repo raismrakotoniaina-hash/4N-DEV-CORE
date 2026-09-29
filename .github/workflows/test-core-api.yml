@@ -1,4 +1,3 @@
-
 name: Test 4N DEV Core API
 
 on:
@@ -7,16 +6,24 @@ on:
 jobs:
   test-api:
     runs-on: ubuntu-latest
+
     steps:
       - name: Test API key
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
         run: |
-          curl --fail-with-body --silent --show-error \
+          curl --max-time 30 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
             -H "Authorization: Bearer $CORE_API_KEY" \
             https://fourn-dev-core.onrender.com/v1/me \
             -o response.json
 
+          echo "=== API RESPONSE ==="
+          cat response.json
+
+          echo "=== CHECK ==="
           python3 -c '
           import json
           with open("response.json") as f:
