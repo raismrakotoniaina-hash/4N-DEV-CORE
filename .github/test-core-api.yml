@@ -1,0 +1,28 @@
+
+name: Test 4N DEV Core API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test API key
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            https://fourn-dev-core.onrender.com/v1/me \
+            -o response.json
+
+          python3 -c '
+          import json
+          with open("response.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "API test failed"
+          print("API KEY VALID")
+          print("Plan:", data["developer"]["plan"])
+          print("Credits:", data["developer"]["credits"])
+          '
