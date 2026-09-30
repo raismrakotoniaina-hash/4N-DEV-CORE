@@ -53,7 +53,7 @@ export default {
   async createCheckout({ order, payment }) {
     if (!this.isConfigured()) return notConfigured();
 
-    const baseUrl = process.env.PUBLIC_API_URL;
+    const baseUrl = process.env.PUBLIC_API_URL?.replace(/\/+$/, "");
     const successUrl = process.env.PAPI_SUCCESS_URL || (baseUrl ? `${baseUrl}/payment/success` : null);
     const failureUrl = process.env.PAPI_FAILURE_URL || (baseUrl ? `${baseUrl}/payment/failure` : null);
     const notificationUrl = process.env.PAPI_NOTIFICATION_URL || (baseUrl ? `${baseUrl}/v1/billing/webhooks/papi` : null);
