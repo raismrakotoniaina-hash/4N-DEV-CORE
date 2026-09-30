@@ -182,3 +182,43 @@ jobs:
           print("CREDITS OK | Before:", before, "| After:", after)
           print("ALL CORE API TESTS PASSED")
           PY
+
+
+          echo "== 9. PAPI CHECKOUT =="
+          request "$API/billing/providers" > billing-providers.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("billing-providers.json"))
+          papi=next(p for p in d["providers"] if p["id"]=="papi")
+          assert papi["configured"] is True, "PAPI is not configured"
+          print("PAPI PROVIDER OK | Configured:", papi["configured"])
+          PY
+
+          request -X POST -H "Content-Type: application/json"             -d '{"planId":"starter","currency":"MGA"}' "$API/billing/orders" > billing-order.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("billing-order.json"))
+          assert d["success"] is True
+          assert d["order"]["planId"]=="starter"
+          assert d["order"]["amount"]==45000
+          open("billing_order_id.txt","w").write(d["order"]["id"])
+          print("PAPI ORDER OK | Starter | 45,000 MGA")
+          PY
+
+          ORDER_ID=$(cat billing_order_id.txt)
+          request -X POST -H "Content-Type: application/json"             -d '{"provider":"papi"}' "$API/billing/orders/$ORDER_ID/checkout" > billing-checkout.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("billing-checkout.json"))
+          assert d["success"] is True
+          assert d["provider"]=="papi"
+          assert d["payment"]["status"]=="pending"
+          checkout=d["checkout"]
+          url=checkout.get("paymentLink") or checkout.get("shortLink")
+          assert url and url.startswith("http"), "Missing PAPI checkout URL"
+          print("PAPI CHECKOUT OK")
+          print("Checkout URL:", url)
+          print("Payment ID:", d["payment"]["id"])
+          PY
+
+          echo "PAPI CHECKOUT CREATED | Complete the test payment from the checkout URL above."
