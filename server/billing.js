@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { addCredits } from "./credits.js";
+import { updateApiKeyPlan } from "./apiKeys.js";
 import { getPlan } from "./plans.js";
 
 const dataDir = path.join(process.cwd(), "data");
@@ -118,7 +119,7 @@ export function listProviders() {
       name: "PAPI",
       type: "local",
       currency: ["MGA"],
-      status: "planned"
+      status: "available"
     },
     {
       id: "international",
@@ -129,7 +130,6 @@ export function listProviders() {
     }
   ];
 }
-
 
 export function fulfillPaidPayment(paymentId, providerReference = null) {
   const store = readStore();
@@ -162,13 +162,21 @@ export function fulfillPaidPayment(paymentId, providerReference = null) {
 
   writeStore(store);
 
-  const balance = addCredits(order.apiKeyId, plan.credits, `payment_${payment.provider}`);
+  const balance = addCredits(
+    order.apiKeyId,
+    plan.credits,
+    `payment_${payment.provider}`
+  );
+
+  const updatedKey = updateApiKeyPlan(order.apiKeyId, plan.id);
 
   return {
     success: true,
     alreadyFulfilled: false,
     payment,
     order,
+    plan: plan.id,
+    planUpdated: Boolean(updatedKey) || order.apiKeyId === "core-bootstrap-key",
     creditsAdded: plan.credits,
     balance
   };
