@@ -104,11 +104,7 @@ jobs:
           echo "== 6. VERIFY RENDER ROUTE WITHOUT API KEY =="
 
           ROUTE_CHECK_FILE=$(mktemp)
-          ROUTE_STATUS=$(curl -sS -o "$ROUTE_CHECK_FILE" -w "%{http_code}" -X POST \\
-            "$API_URL/v1/billing/webhooks/papi" \\
-            -H "Content-Type: application/json" \\
-            -H "X-Papi-Signature: t=0,v1=invalid" \\
-            --data-binary "$PAYLOAD")
+          ROUTE_STATUS=$(curl -sS -o "$ROUTE_CHECK_FILE" -w "%{http_code}" -X POST "$API_URL/v1/billing/webhooks/papi" -H "Content-Type: application/json" -H "X-Papi-Signature: t=0,v1=invalid" --data-binary "$PAYLOAD")
 
           cat "$ROUTE_CHECK_FILE" | jq .
           echo "ROUTE_STATUS=$ROUTE_STATUS"
