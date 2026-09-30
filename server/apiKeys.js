@@ -72,4 +72,24 @@ export function authenticateApiKey(key) {
   );
 
   return record || null;
-    }
+}
+
+export function updateApiKeyPlan(apiKeyId, planId) {
+  if (!apiKeyId || !planId) return null;
+
+  const keys = readKeys();
+  const index = keys.findIndex(
+    (item) => item.id === apiKeyId && item.active
+  );
+
+  if (index === -1) return null;
+
+  keys[index] = {
+    ...keys[index],
+    planId,
+    updatedAt: new Date().toISOString()
+  };
+
+  writeKeys(keys);
+  return keys[index];
+}
