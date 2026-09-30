@@ -52,10 +52,24 @@ export function createApiKey({
 export function authenticateApiKey(key) {
   if (!key || !key.startsWith("4ndev_sk_")) return null;
 
+  const bootstrapKey = process.env.CORE_API_KEY;
+
+  if (bootstrapKey && key === bootstrapKey) {
+    return {
+      id: "core-bootstrap-key",
+      name: "4N DEV Core",
+      planId: process.env.CORE_API_KEY_PLAN || "pro",
+      prefix: key.slice(0, 20),
+      scopes: ["chat", "coding", "image", "embeddings"],
+      active: true,
+      createdAt: "bootstrap"
+    };
+  }
+
   const hash = crypto.createHash("sha256").update(key).digest("hex");
   const record = readKeys().find(
     (item) => item.hash === hash && item.active
   );
 
   return record || null;
-}
+    }
