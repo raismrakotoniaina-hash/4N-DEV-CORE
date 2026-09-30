@@ -141,7 +141,7 @@ jobs:
           credits = data["developer"]["credits"]
           with open("before_credits.txt") as f:
               before = int(f.read().strip())
-          expected = before - 6
+          expected = before - 16
           assert credits == expected, f"Expected {expected} credits after 1 chat + 5 coding, got {credits}"
           print("CREDIT DEDUCTION VALID")
           print("Final credits:", credits)
