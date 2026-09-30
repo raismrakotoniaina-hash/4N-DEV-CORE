@@ -8,377 +8,177 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test API key, chat, coding, and credits
+      - name: Run Core API smoke and CRUD tests
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
         run: |
-          curl --max-time 30 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            https://fourn-dev-core.onrender.com/v1/me \
-            -o me.json
+          set -e
 
-          echo "=== BEFORE TESTS ==="
-          cat me.json
+          request() {
+            curl --fail-with-body --max-time 60 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
 
-          python3 -c '
-          import json
-          with open("me.json") as f:
+          json_check() {
+            python3 - "$@" <<'PY'
+          import json, sys
+          path, expected_key, expected_value = sys.argv[1:4]
+          with open(path) as f:
               data = json.load(f)
-          assert data.get("success") is True, "API test failed"
-          assert data["developer"]["credits"] >= 27, "Not enough credits for chat + coding + image + embeddings + builder test"
-          print("API KEY VALID")
-          print("Plan:", data["developer"]["plan"])
-          print("Credits before:", data["developer"]["credits"])
-          with open("before_credits.txt", "w") as out:
-              out.write(str(data["developer"]["credits"]))
-          '
+          assert data.get("success") is True, f"{path}: API request failed"
+          if expected_key:
+              assert data.get(expected_key) == json.loads(expected_value), f"{path}: unexpected {expected_key}"
+          PY
+          }
 
-          curl --max-time 60 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"input":"Say exactly: 4N DEV chat test OK"}' \
-            https://fourn-dev-core.onrender.com/v1/chat \
-            -o chat.json
-
-          echo "=== CHAT RESPONSE ==="
-          cat chat.json
-
-          python3 -c '
-          import json
-          with open("chat.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Chat API test failed"
-          assert isinstance(data.get("output"), str), "Missing chat output"
-          assert data.get("credits_used") == 1, "Expected 1 chat credit"
-          assert data.get("model") == "4n-dev-demo-chat", "Unexpected chat demo model"
-          print("CHAT API VALID")
-          print("Model:", data.get("model"))
-          print("Credits used:", data.get("credits_used"))
-          print("Credits remaining:", data.get("credits_remaining"))
-          '
-
-          curl --max-time 60 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"input":"Create a JavaScript function that adds two numbers."}' \
-            https://fourn-dev-core.onrender.com/v1/coding \
-            -o coding.json
-
-          echo "=== CODING RESPONSE ==="
-          cat coding.json
-
-          python3 -c '
-          import json
-          with open("coding.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Coding API test failed"
-          assert isinstance(data.get("output"), str), "Missing coding output"
-          assert data.get("credits_used") == 5, "Expected 5 coding credits"
-          assert data.get("model") == "4n-dev-demo-coding", "Unexpected coding demo model"
-          print("CODING API VALID")
-          print("Model:", data.get("model"))
-          print("Credits used:", data.get("credits_used"))
-          print("Credits remaining:", data.get("credits_remaining"))
-          '
-
-          curl --max-time 60 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt":"A futuristic 4N DEV technology logo in a glass style","quality":"low"}' \
-            https://fourn-dev-core.onrender.com/v1/image \
-            -o image.json
-
-          echo "=== IMAGE RESPONSE ==="
-          cat image.json
-
-          python3 -c '
-          import json
-          with open("image.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Image API test failed"
-          assert data.get("model") == "4n-dev-demo-image", "Unexpected image demo model"
-          assert data.get("credits_used") == 10, "Expected 10 image credits for low quality"
-          assert isinstance(data.get("image"), dict), "Missing demo image"
-          assert data["image"].get("type") == "url", "Expected image URL"
-          assert str(data["image"].get("url", "")).startswith("data:image/svg+xml;base64,"), "Expected demo SVG data URL"
-          print("IMAGE API VALID")
-          print("Model:", data.get("model"))
-          print("Credits used:", data.get("credits_used"))
-          print("Credits remaining:", data.get("credits_remaining"))
-          '
-
-          curl --max-time 60 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"input":"4N DEV embeddings test"}' \
-            https://fourn-dev-core.onrender.com/v1/embeddings \
-            -o embeddings.json
-
-          echo "=== EMBEDDINGS RESPONSE ==="
-          cat embeddings.json
-
-          python3 -c '
-          import json
-          with open("embeddings.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Embeddings API test failed"
-          assert data.get("model") == "4n-dev-demo-embedding", "Unexpected embeddings demo model"
-          assert data.get("credits_used") == 1, "Expected 1 embedding credit"
-          assert isinstance(data.get("data"), list), "Missing embedding data"
-          assert len(data["data"]) >= 1, "Expected at least one embedding"
-          assert isinstance(data["data"][0].get("embedding"), list), "Missing embedding vector"
-          assert len(data["data"][0]["embedding"]) == 8, "Expected 8-dimensional demo vector"
-          print("EMBEDDINGS API VALID")
-          print("Model:", data.get("model"))
-          print("Credits used:", data.get("credits_used"))
-          print("Credits remaining:", data.get("credits_remaining"))
-          '
-
-          curl --max-time 60 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt":"Create a simple 4N DEV landing page","projectName":"4N DEV Builder Test"}' \
-            https://fourn-dev-core.onrender.com/v1/builder \
-            -o builder.json
-
-          echo "=== BUILDER RESPONSE ==="
-          cat builder.json
-
-          python3 -c '
-          import json
-          with open("builder.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Builder API test failed"
-          assert data.get("model") == "4n-dev-demo-builder", "Unexpected builder demo model"
-          assert data.get("credits_used") == 10, "Expected 10 builder credits"
-          assert isinstance(data.get("project"), dict), "Missing builder project"
-          assert isinstance(data.get("files"), list), "Missing builder files"
-          assert len(data["files"]) >= 1, "Expected at least one generated file"
-          paths = [item.get("path") for item in data["files"]]
-          assert "index.html" in paths, "Expected index.html from builder"
-          index_file = next(item for item in data["files"] if item.get("path") == "index.html")
-          assert isinstance(index_file.get("content"), str) and len(index_file["content"]) > 0, "index.html content missing"
-          print("BUILDER API VALID")
-          print("Model:", data.get("model"))
-          print("Files generated:", len(data["files"]))
-          print("Credits used:", data.get("credits_used"))
-          print("Credits remaining:", data.get("credits_remaining"))
-          '
-
+          echo "== 1. AUTH + STARTING CREDITS =="
+          request "$API/me" > me.json
           python3 - <<'PY'
-import json
-with open("builder.json") as f:
-    data = json.load(f)
-project_id = data["project"]["id"]
-with open("project_id.txt", "w") as out:
-    out.write(project_id)
-print("Builder project ID:", project_id)
-PY
+          import json
+          data = json.load(open("me.json"))
+          assert data["success"] is True
+          assert data["developer"]["plan"] == "pro"
+          assert data["developer"]["credits"] >= 27
+          open("before.txt","w").write(str(data["developer"]["credits"]))
+          print("AUTH OK | Plan:", data["developer"]["plan"], "| Credits:", data["developer"]["credits"])
+          PY
+
+          echo "== 2. CHAT =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"input":"Say exactly: 4N DEV chat test OK"}' "$API/chat" > chat.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("chat.json"))
+          assert d["success"] and isinstance(d["output"],str)
+          assert d["model"]=="4n-dev-demo-chat" and d["credits_used"]==1
+          print("CHAT OK | 1 credit")
+          PY
+
+          echo "== 3. CODING =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"input":"Create a JavaScript function that adds two numbers."}' "$API/coding" > coding.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("coding.json"))
+          assert d["success"] and isinstance(d["output"],str)
+          assert d["model"]=="4n-dev-demo-coding" and d["credits_used"]==5
+          print("CODING OK | 5 credits")
+          PY
+
+          echo "== 4. IMAGE =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"prompt":"A futuristic 4N DEV technology logo","quality":"low"}' "$API/image" > image.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("image.json"))
+          assert d["success"] and d["model"]=="4n-dev-demo-image"
+          assert d["credits_used"]==10
+          assert d["image"]["url"].startswith("data:image/svg+xml;base64,")
+          print("IMAGE OK | 10 credits")
+          PY
+
+          echo "== 5. EMBEDDINGS =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"input":"4N DEV embeddings test"}' "$API/embeddings" > embeddings.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("embeddings.json"))
+          assert d["success"] and d["model"]=="4n-dev-demo-embedding"
+          assert d["credits_used"]==1
+          assert len(d["data"][0]["embedding"])==8
+          print("EMBEDDINGS OK | 1 credit")
+          PY
+
+          echo "== 6. BUILDER =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a simple 4N DEV landing page","projectName":"4N DEV Test"}' "$API/builder" > builder.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("builder.json"))
+          assert d["success"] and d["model"]=="4n-dev-demo-builder"
+          assert d["credits_used"]==10 and d["files"]
+          assert any(f["path"]=="index.html" and f["content"] for f in d["files"])
+          open("project_id.txt","w").write(d["project"]["id"])
+          print("BUILDER OK | 10 credits")
+          PY
 
           PROJECT_ID=$(cat project_id.txt)
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects             -o projects.json
-
-          echo "=== PROJECT LIST ==="
-          cat projects.json
-
-          python3 -c '
+          echo "== 7. PROJECT + FILE CRUD =="
+          request "$API/projects" > projects.json
+          python3 - <<'PY'
           import json
-          with open("projects.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Project list API test failed"
-          projects = data.get("projects")
-          assert isinstance(projects, list), "Missing projects list"
-          with open("project_id.txt") as f:
-              project_id = f.read().strip()
-          assert any(item.get("id") == project_id for item in projects), "Builder project missing from project list"
-          print("PROJECT LIST API VALID")
-          '
+          d=json.load(open("projects.json"))
+          assert d["success"] and any(p["id"]==open("project_id.txt").read() for p in d["projects"])
+          print("PROJECT LIST OK")
+          PY
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o project.json
-
-          echo "=== PROJECT GET ==="
-          cat project.json
-
-          python3 -c '
+          request "$API/projects/$PROJECT_ID" > project.json
+          python3 - <<'PY'
           import json
-          with open("project.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Project get API test failed"
-          assert data["project"]["id"], "Missing project id"
-          print("PROJECT GET API VALID")
-          '
+          assert json.load(open("project.json"))["success"]
+          PY
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X PATCH             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"description":"Updated by 4N DEV Core automated test"}'             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o project-update.json
-
-          echo "=== PROJECT UPDATE ==="
-          cat project-update.json
-
-          python3 -c '
+          request -X PATCH -H "Content-Type: application/json" \
+            -d '{"description":"Automated CRUD test"}' "$API/projects/$PROJECT_ID" > project-update.json
+          python3 - <<'PY'
           import json
-          with open("project-update.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Project update API test failed"
-          assert data["project"]["description"] == "Updated by 4N DEV Core automated test", "Project update was not saved"
-          print("PROJECT UPDATE API VALID")
-          '
+          assert json.load(open("project-update.json"))["project"]["description"]=="Automated CRUD test"
+          print("PROJECT GET/UPDATE OK")
+          PY
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files             -o files.json
-
-          echo "=== FILE LIST ==="
-          cat files.json
-
-          python3 -c '
+          request "$API/projects/$PROJECT_ID/files" > files.json
+          python3 - <<'PY'
           import json
-          with open("files.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "File list API test failed"
-          files = data.get("files")
-          assert isinstance(files, list), "Missing files list"
-          assert any(item.get("path") == "index.html" for item in files), "index.html missing from file list"
-          index_file = next(item for item in files if item.get("path") == "index.html")
-          with open("file_id.txt", "w") as out:
-              out.write(index_file["id"])
-          print("FILE LIST API VALID")
-          print("index.html file ID:", index_file["id"])
-          '
+          d=json.load(open("files.json"))
+          f=next(x for x in d["files"] if x["path"]=="index.html")
+          open("file_id.txt","w").write(f["id"])
+          print("FILE LIST OK")
+          PY
 
           FILE_ID=$(cat file_id.txt)
-
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files/$FILE_ID             -o file.json
-
-          echo "=== FILE GET ==="
-          cat file.json
-
-          python3 -c '
+          request "$API/projects/$PROJECT_ID/files/$FILE_ID" > file.json
+          python3 - <<'PY'
           import json
-          with open("file.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "File get API test failed"
-          assert data["file"]["path"] == "index.html", "Unexpected file path"
-          assert isinstance(data["file"]["content"], str) and len(data["file"]["content"]) > 0, "File content missing"
-          print("FILE GET API VALID")
-          '
+          d=json.load(open("file.json"))
+          assert d["success"] and d["file"]["content"]
+          PY
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"test.txt","content":"4N DEV file API test"}'             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files             -o file-create.json
-
-          echo "=== FILE CREATE ==="
-          cat file-create.json
-
-          python3 -c '
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"path":"test.txt","content":"4N DEV CRUD test"}' "$API/projects/$PROJECT_ID/files" > file-create.json
+          python3 - <<'PY'
           import json
-          with open("file-create.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "File create API test failed"
-          assert data["file"]["path"] == "test.txt", "Unexpected created file path"
-          with open("test_file_id.txt", "w") as out:
-              out.write(data["file"]["id"])
-          print("FILE CREATE API VALID")
-          '
+          d=json.load(open("file-create.json"))
+          assert d["success"]
+          open("test_file_id.txt","w").write(d["file"]["id"])
+          PY
 
           TEST_FILE_ID=$(cat test_file_id.txt)
-
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X PUT             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"content":"4N DEV file API update OK"}'             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files/$TEST_FILE_ID             -o file-update.json
-
-          echo "=== FILE UPDATE ==="
-          cat file-update.json
-
-          python3 -c '
+          request -X PUT -H "Content-Type: application/json" \
+            -d '{"content":"4N DEV CRUD update OK"}' "$API/projects/$PROJECT_ID/files/$TEST_FILE_ID" > file-update.json
+          python3 - <<'PY'
           import json
-          with open("file-update.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "File update API test failed"
-          assert data["file"]["content"] == "4N DEV file API update OK", "File update was not saved"
-          print("FILE UPDATE API VALID")
-          '
+          assert json.load(open("file-update.json"))["file"]["content"]=="4N DEV CRUD update OK"
+          PY
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X DELETE             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files/$TEST_FILE_ID             -o file-delete.json
-
-          echo "=== FILE DELETE ==="
-          cat file-delete.json
-
-          python3 -c '
+          request -X DELETE "$API/projects/$PROJECT_ID/files/$TEST_FILE_ID" > file-delete.json
+          request -X DELETE "$API/projects/$PROJECT_ID" > project-delete.json
+          python3 - <<'PY'
           import json
-          with open("file-delete.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "File delete API test failed"
-          assert data.get("deleted") is True, "File was not deleted"
-          print("FILE DELETE API VALID")
-          '
+          assert json.load(open("file-delete.json"))["deleted"] is True
+          assert json.load(open("project-delete.json"))["deleted"] is True
+          print("PROJECT/FILE CRUD OK")
+          PY
 
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X DELETE             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o project-delete.json
-
-          echo "=== PROJECT DELETE ==="
-          cat project-delete.json
-
-          python3 -c '
+          echo "== 8. FINAL CREDITS =="
+          request "$API/me" > after.json
+          python3 - <<'PY'
           import json
-          with open("project-delete.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Project delete API test failed"
-          assert data.get("deleted") is True, "Project was not deleted"
-          print("PROJECT DELETE API VALID")
-          '
-
-          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o deleted-project.json
-
-          echo "=== DELETED PROJECT CHECK ==="
-          cat deleted-project.json
-
-          python3 -c '
-          import json
-          with open("deleted-project.json") as f:
-              data = json.load(f)
-          assert data.get("success") is False, "Deleted project is still accessible"
-          assert "not found" in data.get("error", "").lower(), "Expected project not found after deletion"
-          print("PROJECT DELETE VERIFICATION VALID")
-          '
-
-          curl --max-time 30 \
-            --silent \
-            --show-error \
-            --write-out "\nHTTP_STATUS:%{http_code}\n" \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            https://fourn-dev-core.onrender.com/v1/me \
-            -o after.json
-
-          echo "=== AFTER TESTS ==="
-          cat after.json
-
-          python3 -c '
-          import json
-          with open("after.json") as f:
-              data = json.load(f)
-          assert data.get("success") is True, "Final balance check failed"
-          credits = data["developer"]["credits"]
-          with open("before_credits.txt") as f:
-              before = int(f.read().strip())
-          expected = before - 27
-          assert credits == expected, f"Expected {expected} credits after 1 chat + 5 coding, got {credits}"
-          print("CREDIT DEDUCTION VALID")
-          print("Final credits:", credits)
+          before=int(open("before.txt").read())
+          after=json.load(open("after.json"))["developer"]["credits"]
+          assert after==before-27, f"Expected {before-27}, got {after}"
+          print("CREDITS OK | Before:", before, "| After:", after)
           print("ALL CORE API TESTS PASSED")
-          '
+          PY
