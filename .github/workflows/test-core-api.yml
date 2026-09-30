@@ -214,11 +214,14 @@ jobs:
           assert d["provider"]=="papi"
           assert d["payment"]["status"]=="pending"
           checkout=d["checkout"]
-          url=checkout.get("paymentLink") or checkout.get("shortLink")
+          payment_url=checkout.get("paymentLink")
+          short_url=checkout.get("shortLink")
+          url=short_url or payment_url
           assert url and url.startswith("http"), "Missing PAPI checkout URL"
           print("PAPI CHECKOUT OK")
-          print("Checkout URL:", url)
+          print("Short checkout URL:", short_url or "none")
+          print("Payment URL available:", bool(payment_url))
           print("Payment ID:", d["payment"]["id"])
           PY
 
-          echo "PAPI CHECKOUT CREATED | Complete the test payment from the checkout URL above."
+          echo "PAPI CHECKOUT CREATED | Use the Short checkout URL shown above."
