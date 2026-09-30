@@ -92,6 +92,36 @@ jobs:
           print("Credits remaining:", data.get("credits_remaining"))
           '
 
+          curl --max-time 60 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"A futuristic 4N DEV technology logo in a glass style","quality":"low"}' \
+            https://fourn-dev-core.onrender.com/v1/image \
+            -o image.json
+
+          echo "=== IMAGE RESPONSE ==="
+          cat image.json
+
+          python3 -c '
+          import json
+          with open("image.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Image API test failed"
+          assert data.get("model") == "4n-dev-demo-image", "Unexpected image demo model"
+          assert data.get("credits_used") == 10, "Expected 10 image credits for low quality"
+          assert isinstance(data.get("image"), dict), "Missing demo image"
+          assert data["image"].get("type") == "url", "Expected image URL"
+          assert str(data["image"].get("url", "")).startswith("data:image/svg+xml;base64,"), "Expected demo SVG data URL"
+          print("IMAGE API VALID")
+          print("Model:", data.get("model"))
+          print("Credits used:", data.get("credits_used"))
+          print("Credits remaining:", data.get("credits_remaining"))
+          '
+
           curl --max-time 30 \
             --silent \
             --show-error \
