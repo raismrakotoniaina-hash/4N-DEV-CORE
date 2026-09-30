@@ -101,6 +101,26 @@ jobs:
           echo "Timestamp generated: true"
           echo "Signature generated: true"
 
+          echo "== 6. VERIFY RENDER ROUTE WITHOUT API KEY =="
+
+          ROUTE_CHECK_FILE=$(mktemp)
+          ROUTE_STATUS=$(curl -sS -o "$ROUTE_CHECK_FILE" -w "%{http_code}" -X POST \\
+            "$API_URL/v1/billing/webhooks/papi" \\
+            -H "Content-Type: application/json" \\
+            -H "X-Papi-Signature: t=0,v1=invalid" \\
+            --data-binary "$PAYLOAD")
+
+          cat "$ROUTE_CHECK_FILE" | jq .
+          echo "ROUTE_STATUS=$ROUTE_STATUS"
+
+          if [ "$ROUTE_STATUS" = "401" ]; then
+            echo "ERROR: Render is still applying requireApiKey() to the PAPI webhook."
+            echo "The deployed Render version does not match the current repository webhook route."
+            exit 1
+          fi
+
+          echo "Webhook route accepts unauthenticated requests: true"
+
           echo "== 6. SEND SIGNED WEBHOOK =="
 
           RESPONSE_FILE=$(mktemp)
