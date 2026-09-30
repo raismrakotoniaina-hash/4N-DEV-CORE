@@ -1,0 +1,151 @@
+name: Test PAPI Webhook Signature
+
+on:
+  workflow_dispatch:
+
+jobs:
+  papi-webhook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create payment and send signed PAPI webhook
+        env:
+          API_URL: https://fourn-dev-core.onrender.com
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          PAPI_WEBHOOK_SECRET: ${{ secrets.PAPI_WEBHOOK_SECRET }}
+        run: |
+          set -e
+
+          echo "== 1. CREATE STARTER ORDER =="
+
+          ORDER=$(curl -sS -X POST "$API_URL/v1/billing/orders" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -d '{"planId":"starter","currency":"MGA"}')
+
+          echo "$ORDER" | jq .
+
+          ORDER_ID=$(echo "$ORDER" | jq -r '.order.id')
+
+          if [ -z "$ORDER_ID" ] || [ "$ORDER_ID" = "null" ]; then
+            echo "ERROR: Order ID not found"
+            exit 1
+          fi
+
+          echo "ORDER_ID=$ORDER_ID"
+
+          echo "== 2. CREATE PAPI CHECKOUT =="
+
+          CHECKOUT=$(curl -sS -X POST \
+            "$API_URL/v1/billing/orders/$ORDER_ID/checkout" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -d '{"provider":"papi"}')
+
+          echo "$CHECKOUT" | jq .
+
+          PAYMENT_ID=$(echo "$CHECKOUT" | jq -r '.payment.id')
+          NOTIFICATION_TOKEN=$(echo "$CHECKOUT" | jq -r '.payment.notificationToken')
+
+          if [ -z "$PAYMENT_ID" ] || [ "$PAYMENT_ID" = "null" ]; then
+            echo "ERROR: Payment ID not found"
+            exit 1
+          fi
+
+          if [ -z "$NOTIFICATION_TOKEN" ] || [ "$NOTIFICATION_TOKEN" = "null" ]; then
+            echo "ERROR: Notification token not found"
+            exit 1
+          fi
+
+          echo "PAYMENT_ID=$PAYMENT_ID"
+          echo "Notification token received: true"
+
+          echo "== 3. READ STARTING CREDITS =="
+
+          BEFORE=$(curl -sS \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API_URL/v1/credits")
+
+          echo "$BEFORE" | jq .
+
+          BEFORE_CREDITS=$(echo "$BEFORE" | jq -r '.credits.balance // .balance // 0')
+          echo "BEFORE_CREDITS=$BEFORE_CREDITS"
+
+          echo "== 4. BUILD PAPI SUCCESS PAYLOAD =="
+
+          PAYLOAD=$(jq -cn \
+            --arg paymentId "$PAYMENT_ID" \
+            --arg token "$NOTIFICATION_TOKEN" \
+            '{
+              paymentStatus: "SUCCESS",
+              paymentMethod: "MVOLA",
+              currency: "MGA",
+              displayCurrency: "MGA",
+              amount: 45000,
+              fee: 0,
+              clientName: "4N DEV Webhook Test",
+              description: "4N DEV PAPI webhook signature test",
+              merchantPaymentReference: $paymentId,
+              paymentReference: ("WEBHOOK-TEST-" + $paymentId),
+              notificationToken: $token,
+              payerPhone: "+261341230001"
+            }')
+
+          echo "$PAYLOAD" | jq .
+
+          echo "== 5. SIGN RAW PAYLOAD =="
+
+          TIMESTAMP=$(date +%s)
+          SIGNATURE=$(printf '%s' "$TIMESTAMP.$PAYLOAD" | openssl dgst -sha256 -hmac "$PAPI_WEBHOOK_SECRET" -hex | sed 's/^.* //')
+
+          echo "Timestamp generated: true"
+          echo "Signature generated: true"
+
+          echo "== 6. SEND SIGNED WEBHOOK =="
+
+          RESPONSE_FILE=$(mktemp)
+
+          HTTP_STATUS=$(curl -sS -o "$RESPONSE_FILE" -w "%{http_code}" -X POST \
+            "$API_URL/v1/billing/webhooks/papi" \
+            -H "Content-Type: application/json" \
+            -H "X-Papi-Signature: t=$TIMESTAMP,v1=$SIGNATURE" \
+            --data-binary "$PAYLOAD")
+
+          cat "$RESPONSE_FILE" | jq .
+
+          echo "HTTP_STATUS=$HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: Signed PAPI webhook was rejected"
+            exit 1
+          fi
+
+          WEBHOOK_SUCCESS=$(jq -r '.success' "$RESPONSE_FILE")
+
+          if [ "$WEBHOOK_SUCCESS" != "true" ]; then
+            echo "ERROR: Webhook response success is not true"
+            exit 1
+          fi
+
+          echo "PAPI WEBHOOK SIGNATURE VERIFIED"
+
+          echo "== 7. VERIFY CREDITS =="
+
+          AFTER=$(curl -sS \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API_URL/v1/credits")
+
+          echo "$AFTER" | jq .
+
+          AFTER_CREDITS=$(echo "$AFTER" | jq -r '.credits.balance // .balance // 0')
+          echo "AFTER_CREDITS=$AFTER_CREDITS"
+
+          EXPECTED=$((BEFORE_CREDITS + 100))
+
+          if [ "$AFTER_CREDITS" != "$EXPECTED" ]; then
+            echo "ERROR: Expected credits $EXPECTED but got $AFTER_CREDITS"
+            exit 1
+          fi
+
+          echo "CREDITS FULFILLMENT OK | +100 credits"
+          echo "ALL PAPI WEBHOOK TESTS PASSED"
