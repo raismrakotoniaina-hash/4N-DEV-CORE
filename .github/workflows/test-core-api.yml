@@ -32,6 +32,8 @@ jobs:
           print("API KEY VALID")
           print("Plan:", data["developer"]["plan"])
           print("Credits before:", data["developer"]["credits"])
+          with open("before_credits.txt", "w") as out:
+              out.write(str(data["developer"]["credits"]))
           '
 
           curl --max-time 60 \
@@ -107,7 +109,10 @@ jobs:
               data = json.load(f)
           assert data.get("success") is True, "Final balance check failed"
           credits = data["developer"]["credits"]
-          assert credits == 493, f"Expected 493 credits after 1 chat + 5 coding, got {credits}"
+          with open("before_credits.txt") as f:
+              before = int(f.read().strip())
+          expected = before - 6
+          assert credits == expected, f"Expected {expected} credits after 1 chat + 5 coding, got {credits}"
           print("CREDIT DEDUCTION VALID")
           print("Final credits:", credits)
           print("ALL CORE API TESTS PASSED")
