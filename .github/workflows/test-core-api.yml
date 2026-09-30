@@ -188,6 +188,175 @@ jobs:
           print("Credits remaining:", data.get("credits_remaining"))
           '
 
+          python3 - <<'PY'
+import json
+with open("builder.json") as f:
+    data = json.load(f)
+project_id = data["project"]["id"]
+with open("project_id.txt", "w") as out:
+    out.write(project_id)
+print("Builder project ID:", project_id)
+PY
+
+          PROJECT_ID=$(cat project_id.txt)
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects             -o projects.json
+
+          echo "=== PROJECT LIST ==="
+          cat projects.json
+
+          python3 -c '
+          import json
+          with open("projects.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Project list API test failed"
+          projects = data.get("projects")
+          assert isinstance(projects, list), "Missing projects list"
+          with open("project_id.txt") as f:
+              project_id = f.read().strip()
+          assert any(item.get("id") == project_id for item in projects), "Builder project missing from project list"
+          print("PROJECT LIST API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o project.json
+
+          echo "=== PROJECT GET ==="
+          cat project.json
+
+          python3 -c '
+          import json
+          with open("project.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Project get API test failed"
+          assert data["project"]["id"], "Missing project id"
+          print("PROJECT GET API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X PATCH             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"description":"Updated by 4N DEV Core automated test"}'             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o project-update.json
+
+          echo "=== PROJECT UPDATE ==="
+          cat project-update.json
+
+          python3 -c '
+          import json
+          with open("project-update.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Project update API test failed"
+          assert data["project"]["description"] == "Updated by 4N DEV Core automated test", "Project update was not saved"
+          print("PROJECT UPDATE API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files             -o files.json
+
+          echo "=== FILE LIST ==="
+          cat files.json
+
+          python3 -c '
+          import json
+          with open("files.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "File list API test failed"
+          files = data.get("files")
+          assert isinstance(files, list), "Missing files list"
+          assert any(item.get("path") == "index.html" for item in files), "index.html missing from file list"
+          index_file = next(item for item in files if item.get("path") == "index.html")
+          with open("file_id.txt", "w") as out:
+              out.write(index_file["id"])
+          print("FILE LIST API VALID")
+          print("index.html file ID:", index_file["id"])
+          '
+
+          FILE_ID=$(cat file_id.txt)
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files/$FILE_ID             -o file.json
+
+          echo "=== FILE GET ==="
+          cat file.json
+
+          python3 -c '
+          import json
+          with open("file.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "File get API test failed"
+          assert data["file"]["path"] == "index.html", "Unexpected file path"
+          assert isinstance(data["file"]["content"], str) and len(data["file"]["content"]) > 0, "File content missing"
+          print("FILE GET API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"test.txt","content":"4N DEV file API test"}'             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files             -o file-create.json
+
+          echo "=== FILE CREATE ==="
+          cat file-create.json
+
+          python3 -c '
+          import json
+          with open("file-create.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "File create API test failed"
+          assert data["file"]["path"] == "test.txt", "Unexpected created file path"
+          with open("test_file_id.txt", "w") as out:
+              out.write(data["file"]["id"])
+          print("FILE CREATE API VALID")
+          '
+
+          TEST_FILE_ID=$(cat test_file_id.txt)
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X PUT             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"content":"4N DEV file API update OK"}'             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files/$TEST_FILE_ID             -o file-update.json
+
+          echo "=== FILE UPDATE ==="
+          cat file-update.json
+
+          python3 -c '
+          import json
+          with open("file-update.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "File update API test failed"
+          assert data["file"]["content"] == "4N DEV file API update OK", "File update was not saved"
+          print("FILE UPDATE API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X DELETE             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID/files/$TEST_FILE_ID             -o file-delete.json
+
+          echo "=== FILE DELETE ==="
+          cat file-delete.json
+
+          python3 -c '
+          import json
+          with open("file-delete.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "File delete API test failed"
+          assert data.get("deleted") is True, "File was not deleted"
+          print("FILE DELETE API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -X DELETE             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o project-delete.json
+
+          echo "=== PROJECT DELETE ==="
+          cat project-delete.json
+
+          python3 -c '
+          import json
+          with open("project-delete.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Project delete API test failed"
+          assert data.get("deleted") is True, "Project was not deleted"
+          print("PROJECT DELETE API VALID")
+          '
+
+          curl --max-time 30             --silent             --show-error             --write-out "\nHTTP_STATUS:%{http_code}\n"             -H "Authorization: Bearer $CORE_API_KEY"             https://fourn-dev-core.onrender.com/v1/projects/$PROJECT_ID             -o deleted-project.json
+
+          echo "=== DELETED PROJECT CHECK ==="
+          cat deleted-project.json
+
+          python3 -c '
+          import json
+          with open("deleted-project.json") as f:
+              data = json.load(f)
+          assert data.get("success") is False, "Deleted project is still accessible"
+          assert "not found" in data.get("error", "").lower(), "Expected project not found after deletion"
+          print("PROJECT DELETE VERIFICATION VALID")
+          '
+
           curl --max-time 30 \
             --silent \
             --show-error \
