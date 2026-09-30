@@ -80,9 +80,10 @@ export default {
         successUrl,
         failureUrl,
         notificationUrl,
-        validDuration: 1,
+        validDuration: Number(process.env.PAPI_VALID_DURATION_HOURS || 24),
         testReason: process.env.PAPI_TEST_MODE === "true" ? "4N DEV Core integration test" : undefined,
-        isTestMode: process.env.PAPI_TEST_MODE === "true"
+        isTestMode: process.env.PAPI_TEST_MODE === "true",
+        paymentTester: process.env.PAPI_TEST_MODE === "true" ? "MERCHANT_DEV" : undefined
       })
     });
 
