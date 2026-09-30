@@ -30,6 +30,22 @@ app.use(express.json({
   }
 }));
 
+app.get("/payment/success", (req, res) => {
+  res.json({
+    success: true,
+    payment_status: "success",
+    message: "Payment completed. The provider webhook confirms credit fulfillment."
+  });
+});
+
+app.get("/payment/failure", (req, res) => {
+  res.json({
+    success: false,
+    payment_status: "failure",
+    message: "Payment was not completed."
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ success: true, name: "4N DEV Core API", status: "online", version: "0.1.0" });
 });
