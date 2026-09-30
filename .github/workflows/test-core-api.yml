@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test API key
+      - name: Test API key and credits
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
         run: |
@@ -18,18 +18,45 @@ jobs:
             --write-out "\nHTTP_STATUS:%{http_code}\n" \
             -H "Authorization: Bearer $CORE_API_KEY" \
             https://fourn-dev-core.onrender.com/v1/me \
-            -o response.json
+            -o me.json
 
-          echo "=== API RESPONSE ==="
-          cat response.json
+          echo "=== BEFORE CHAT ==="
+          cat me.json
 
-          echo "=== CHECK ==="
           python3 -c '
           import json
-          with open("response.json") as f:
+          with open("me.json") as f:
               data = json.load(f)
           assert data.get("success") is True, "API test failed"
+          assert data["developer"]["credits"] >= 1, "No credits available"
           print("API KEY VALID")
           print("Plan:", data["developer"]["plan"])
-          print("Credits:", data["developer"]["credits"])
+          print("Credits before:", data["developer"]["credits"])
+          '
+
+          curl --max-time 60 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"input":"Say exactly: 4N DEV chat test OK"}' \
+            https://fourn-dev-core.onrender.com/v1/chat \
+            -o chat.json
+
+          echo "=== CHAT RESPONSE ==="
+          cat chat.json
+
+          python3 -c '
+          import json
+          with open("chat.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Chat API test failed"
+          assert isinstance(data.get("output"), str), "Missing chat output"
+          assert data.get("credits_used") == 1, "Expected 1 credit to be used"
+          print("CHAT API VALID")
+          print("Model:", data.get("model"))
+          print("Credits used:", data.get("credits_used"))
+          print("Credits remaining:", data.get("credits_remaining"))
           '
