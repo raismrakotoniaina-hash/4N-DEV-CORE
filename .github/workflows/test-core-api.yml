@@ -28,7 +28,7 @@ jobs:
           with open("me.json") as f:
               data = json.load(f)
           assert data.get("success") is True, "API test failed"
-          assert data["developer"]["credits"] >= 7, "Not enough credits for chat + coding test"
+          assert data["developer"]["credits"] >= 17, "Not enough credits for chat + coding + image + embeddings test"
           print("API KEY VALID")
           print("Plan:", data["developer"]["plan"])
           print("Credits before:", data["developer"]["credits"])
@@ -122,6 +122,37 @@ jobs:
           print("Credits remaining:", data.get("credits_remaining"))
           '
 
+          curl --max-time 60 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"input":"4N DEV embeddings test"}' \
+            https://fourn-dev-core.onrender.com/v1/embeddings \
+            -o embeddings.json
+
+          echo "=== EMBEDDINGS RESPONSE ==="
+          cat embeddings.json
+
+          python3 -c '
+          import json
+          with open("embeddings.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Embeddings API test failed"
+          assert data.get("model") == "4n-dev-demo-embedding", "Unexpected embeddings demo model"
+          assert data.get("credits_used") == 1, "Expected 1 embedding credit"
+          assert isinstance(data.get("data"), list), "Missing embedding data"
+          assert len(data["data"]) >= 1, "Expected at least one embedding"
+          assert isinstance(data["data"][0].get("embedding"), list), "Missing embedding vector"
+          assert len(data["data"][0]["embedding"]) == 8, "Expected 8-dimensional demo vector"
+          print("EMBEDDINGS API VALID")
+          print("Model:", data.get("model"))
+          print("Credits used:", data.get("credits_used"))
+          print("Credits remaining:", data.get("credits_remaining"))
+          '
+
           curl --max-time 30 \
             --silent \
             --show-error \
@@ -141,7 +172,7 @@ jobs:
           credits = data["developer"]["credits"]
           with open("before_credits.txt") as f:
               before = int(f.read().strip())
-          expected = before - 16
+          expected = before - 17
           assert credits == expected, f"Expected {expected} credits after 1 chat + 5 coding, got {credits}"
           print("CREDIT DEDUCTION VALID")
           print("Final credits:", credits)
