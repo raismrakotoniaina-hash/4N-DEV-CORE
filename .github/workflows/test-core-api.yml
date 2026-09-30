@@ -28,7 +28,7 @@ jobs:
           with open("me.json") as f:
               data = json.load(f)
           assert data.get("success") is True, "API test failed"
-          assert data["developer"]["credits"] >= 17, "Not enough credits for chat + coding + image + embeddings test"
+          assert data["developer"]["credits"] >= 27, "Not enough credits for chat + coding + image + embeddings + builder test"
           print("API KEY VALID")
           print("Plan:", data["developer"]["plan"])
           print("Credits before:", data["developer"]["credits"])
@@ -153,6 +153,41 @@ jobs:
           print("Credits remaining:", data.get("credits_remaining"))
           '
 
+          curl --max-time 60 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a simple 4N DEV landing page","projectName":"4N DEV Builder Test"}' \
+            https://fourn-dev-core.onrender.com/v1/builder \
+            -o builder.json
+
+          echo "=== BUILDER RESPONSE ==="
+          cat builder.json
+
+          python3 -c '
+          import json
+          with open("builder.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Builder API test failed"
+          assert data.get("model") == "4n-dev-demo-builder", "Unexpected builder demo model"
+          assert data.get("credits_used") == 10, "Expected 10 builder credits"
+          assert isinstance(data.get("project"), dict), "Missing builder project"
+          assert isinstance(data.get("files"), list), "Missing builder files"
+          assert len(data["files"]) >= 1, "Expected at least one generated file"
+          paths = [item.get("path") for item in data["files"]]
+          assert "index.html" in paths, "Expected index.html from builder"
+          index_file = next(item for item in data["files"] if item.get("path") == "index.html")
+          assert isinstance(index_file.get("content"), str) and len(index_file["content"]) > 0, "index.html content missing"
+          print("BUILDER API VALID")
+          print("Model:", data.get("model"))
+          print("Files generated:", len(data["files"]))
+          print("Credits used:", data.get("credits_used"))
+          print("Credits remaining:", data.get("credits_remaining"))
+          '
+
           curl --max-time 30 \
             --silent \
             --show-error \
@@ -172,7 +207,7 @@ jobs:
           credits = data["developer"]["credits"]
           with open("before_credits.txt") as f:
               before = int(f.read().strip())
-          expected = before - 17
+          expected = before - 27
           assert credits == expected, f"Expected {expected} credits after 1 chat + 5 coding, got {credits}"
           print("CREDIT DEDUCTION VALID")
           print("Final credits:", credits)
