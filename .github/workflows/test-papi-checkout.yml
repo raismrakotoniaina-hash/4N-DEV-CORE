@@ -1,0 +1,57 @@
+name: Test PAPI Checkout
+
+on:
+  workflow_dispatch:
+
+jobs:
+  papi-checkout:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create PAPI checkout
+        env:
+          API_URL: https://fourn-dev-core.onrender.com
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+
+          echo "== CREATE STARTER ORDER =="
+
+          ORDER=$(curl -sS -X POST "$API_URL/v1/billing/orders" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -d '{"planId":"starter","currency":"MGA"}')
+
+          echo "$ORDER"
+
+          ORDER_ID=$(echo "$ORDER" | jq -r '.order.id')
+
+          if [ -z "$ORDER_ID" ] || [ "$ORDER_ID" = "null" ]; then
+            echo "ERROR: Order ID not found"
+            exit 1
+          fi
+
+          echo "ORDER_ID=$ORDER_ID"
+
+          echo "== CREATE PAPI CHECKOUT =="
+
+          CHECKOUT=$(curl -sS -X POST \
+            "$API_URL/v1/billing/orders/$ORDER_ID/checkout" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -d '{"provider":"papi"}')
+
+          echo "$CHECKOUT" | jq .
+
+          echo "== PAPI CHECKOUT CREATED =="
+          echo "Payment ID:"
+          echo "$CHECKOUT" | jq -r '.payment.id'
+
+          echo "Checkout URL:"
+          echo "$CHECKOUT" | jq -r '.checkout.paymentLink // .checkout.shortLink'
+
+          echo "Provider reference:"
+          echo "$CHECKOUT" | jq -r '.checkout.providerReference'
+
+          echo "Notification token received:"
+          echo "$CHECKOUT" | jq -r '.checkout.notificationToken != null'
