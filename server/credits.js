@@ -23,7 +23,32 @@ function write(filePath, data) {
 
 export function getBalance(apiKeyId) {
   const accounts = read(creditsPath);
-  const account = accounts.find((item) => item.apiKeyId === apiKeyId);
+  let account = accounts.find((item) => item.apiKeyId === apiKeyId);
+
+  if (!account && apiKeyId === "core-bootstrap-key") {
+    const initialCredits = Number(process.env.CORE_API_KEY_INITIAL_CREDITS || 500);
+
+    account = {
+      apiKeyId,
+      balance: Number.isInteger(initialCredits) && initialCredits > 0 ? initialCredits : 500,
+      updatedAt: new Date().toISOString()
+    };
+
+    accounts.push(account);
+    write(creditsPath, accounts);
+
+    const transactions = read(transactionsPath);
+    transactions.push({
+      id: crypto.randomUUID(),
+      apiKeyId,
+      type: "credit",
+      amount: account.balance,
+      reason: "bootstrap_pro_plan",
+      createdAt: new Date().toISOString()
+    });
+    write(transactionsPath, transactions);
+  }
+
   return account?.balance ?? 0;
 }
 
