@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test API key and credits
+      - name: Test API key, chat, coding, and credits
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
         run: |
@@ -20,7 +20,7 @@ jobs:
             https://fourn-dev-core.onrender.com/v1/me \
             -o me.json
 
-          echo "=== BEFORE CHAT ==="
+          echo "=== BEFORE TESTS ==="
           cat me.json
 
           python3 -c '
@@ -28,7 +28,7 @@ jobs:
           with open("me.json") as f:
               data = json.load(f)
           assert data.get("success") is True, "API test failed"
-          assert data["developer"]["credits"] >= 1, "No credits available"
+          assert data["developer"]["credits"] >= 9, "Not enough credits for chat + coding test"
           print("API KEY VALID")
           print("Plan:", data["developer"]["plan"])
           print("Credits before:", data["developer"]["credits"])
@@ -54,9 +54,61 @@ jobs:
               data = json.load(f)
           assert data.get("success") is True, "Chat API test failed"
           assert isinstance(data.get("output"), str), "Missing chat output"
-          assert data.get("credits_used") == 1, "Expected 1 credit to be used"
+          assert data.get("credits_used") == 1, "Expected 1 chat credit"
+          assert data.get("model") == "4n-dev-demo-chat", "Unexpected chat demo model"
           print("CHAT API VALID")
           print("Model:", data.get("model"))
           print("Credits used:", data.get("credits_used"))
           print("Credits remaining:", data.get("credits_remaining"))
+          '
+
+          curl --max-time 60 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"input":"Create a JavaScript function that adds two numbers."}' \
+            https://fourn-dev-core.onrender.com/v1/coding \
+            -o coding.json
+
+          echo "=== CODING RESPONSE ==="
+          cat coding.json
+
+          python3 -c '
+          import json
+          with open("coding.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Coding API test failed"
+          assert isinstance(data.get("output"), str), "Missing coding output"
+          assert data.get("credits_used") == 3, "Expected 3 coding credits"
+          assert data.get("model") == "4n-dev-demo-coding", "Unexpected coding demo model"
+          print("CODING API VALID")
+          print("Model:", data.get("model"))
+          print("Credits used:", data.get("credits_used"))
+          print("Credits remaining:", data.get("credits_remaining"))
+          '
+
+          curl --max-time 30 \
+            --silent \
+            --show-error \
+            --write-out "\nHTTP_STATUS:%{http_code}\n" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            https://fourn-dev-core.onrender.com/v1/me \
+            -o after.json
+
+          echo "=== AFTER TESTS ==="
+          cat after.json
+
+          python3 -c '
+          import json
+          with open("after.json") as f:
+              data = json.load(f)
+          assert data.get("success") is True, "Final balance check failed"
+          credits = data["developer"]["credits"]
+          assert credits == 496, f"Expected 496 credits after 1 chat + 3 coding, got {credits}"
+          print("CREDIT DEDUCTION VALID")
+          print("Final credits:", credits)
+          print("ALL CORE API TESTS PASSED")
           '
