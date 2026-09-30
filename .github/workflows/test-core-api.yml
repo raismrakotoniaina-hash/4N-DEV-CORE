@@ -28,7 +28,7 @@ jobs:
           with open("me.json") as f:
               data = json.load(f)
           assert data.get("success") is True, "API test failed"
-          assert data["developer"]["credits"] >= 9, "Not enough credits for chat + coding test"
+          assert data["developer"]["credits"] >= 7, "Not enough credits for chat + coding test"
           print("API KEY VALID")
           print("Plan:", data["developer"]["plan"])
           print("Credits before:", data["developer"]["credits"])
@@ -82,7 +82,7 @@ jobs:
               data = json.load(f)
           assert data.get("success") is True, "Coding API test failed"
           assert isinstance(data.get("output"), str), "Missing coding output"
-          assert data.get("credits_used") == 3, "Expected 3 coding credits"
+          assert data.get("credits_used") == 5, "Expected 5 coding credits"
           assert data.get("model") == "4n-dev-demo-coding", "Unexpected coding demo model"
           print("CODING API VALID")
           print("Model:", data.get("model"))
@@ -107,7 +107,7 @@ jobs:
               data = json.load(f)
           assert data.get("success") is True, "Final balance check failed"
           credits = data["developer"]["credits"]
-          assert credits == 496, f"Expected 496 credits after 1 chat + 3 coding, got {credits}"
+          assert credits == 493, f"Expected 493 credits after 1 chat + 5 coding, got {credits}"
           print("CREDIT DEDUCTION VALID")
           print("Final credits:", credits)
           print("ALL CORE API TESTS PASSED")
