@@ -81,7 +81,7 @@ app.post("/v1/keys", (req, res) => {
   });
 });
 
-app.get("/v1/me", requireApiKey, (req, res) => {
+app.get("/v1/me", requireApiKey(), (req, res) => {
   const plan = getPlan(req.apiKey.planId || "free");
   res.json({
     success: true,
