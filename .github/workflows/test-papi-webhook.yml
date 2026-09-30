@@ -68,7 +68,7 @@ jobs:
 
           echo "$BEFORE" | jq .
 
-          BEFORE_CREDITS=$(echo "$BEFORE" | jq -r '.credits.balance // .balance // 0')
+          BEFORE_CREDITS=$(echo "$BEFORE" | jq -r '.credits // .balance // 0')
           echo "BEFORE_CREDITS=$BEFORE_CREDITS"
 
           echo "== 4. BUILD PAPI SUCCESS PAYLOAD =="
@@ -137,7 +137,7 @@ jobs:
 
           echo "$AFTER" | jq .
 
-          AFTER_CREDITS=$(echo "$AFTER" | jq -r '.credits.balance // .balance // 0')
+          AFTER_CREDITS=$(echo "$AFTER" | jq -r '.credits // .balance // 0')
           echo "AFTER_CREDITS=$AFTER_CREDITS"
 
           EXPECTED=$((BEFORE_CREDITS + 100))
