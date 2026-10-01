@@ -40,7 +40,7 @@ jobs:
           data = json.load(open("me.json"))
           assert data["success"] is True
           assert data["developer"]["plan"] == "pro"
-          assert data["developer"]["credits"] >= 27
+          assert data["developer"]["credits"] >= 29
           open("before.txt","w").write(str(data["developer"]["credits"]))
           print("AUTH OK | Plan:", data["developer"]["plan"], "| Credits:", data["developer"]["credits"])
           PY
@@ -91,7 +91,24 @@ jobs:
           print("EMBEDDINGS OK | 1 credit")
           PY
 
-          echo "== 6. BUILDER =="
+          echo "== 6. BUILDER PLANNER =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"prompt":"Create an e-commerce app with products, cart, checkout and admin dashboard"}' "$API/builder/plan" > builder-plan.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("builder-plan.json"))
+          assert d["success"] and d["model"]=="4n-dev-demo-planner"
+          assert d["credits_used"]==2
+          plan=d["plan"]
+          assert plan["project_type"]=="ecommerce"
+          assert plan["pages"] and plan["features"] and plan["data_models"]
+          assert any("product" in x.lower() for x in plan["pages"])
+          assert any("cart" in x.lower() for x in plan["pages"])
+          assert any("checkout" in x.lower() for x in plan["pages"])
+          print("BUILDER PLANNER OK | ecommerce | 2 credits")
+          PY
+
+          echo "== 7. BUILDER =="
           request -X POST -H "Content-Type: application/json" \
             -d '{"prompt":"Create a simple 4N DEV landing page","projectName":"4N DEV Test"}' "$API/builder" > builder.json
           python3 - <<'PY'
@@ -106,7 +123,7 @@ jobs:
 
           PROJECT_ID=$(cat project_id.txt)
 
-          echo "== 7. PROJECT + FILE CRUD =="
+          echo "== 8. PROJECT + FILE CRUD =="
           request "$API/projects" > projects.json
           python3 - <<'PY'
           import json
@@ -172,19 +189,19 @@ jobs:
           print("PROJECT/FILE CRUD OK")
           PY
 
-          echo "== 8. FINAL CREDITS =="
+          echo "== 9. FINAL CREDITS =="
           request "$API/me" > after.json
           python3 - <<'PY'
           import json
           before=int(open("before.txt").read())
           after=json.load(open("after.json"))["developer"]["credits"]
-          assert after==before-27, f"Expected {before-27}, got {after}"
+          assert after==before-29, f"Expected {before-27}, got {after}"
           print("CREDITS OK | Before:", before, "| After:", after)
           print("ALL CORE API TESTS PASSED")
           PY
 
 
-          echo "== 9. PAPI CHECKOUT =="
+          echo "== 10. PAPI CHECKOUT =="
           request "$API/billing/providers" > billing-providers.json
           python3 - <<'PY'
           import json
