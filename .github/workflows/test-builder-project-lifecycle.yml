@@ -86,7 +86,6 @@ jobs:
           import json
           payload={
               "files":[
-                  {"path":"index.html","content":"<!doctype html><html><head><title>Broken Test</title></head><body><h1>Test</h1></body></html>"},
                   {"path":"app.js","content":"// TODO: implement later\nconsole.log('placeholder');"},
                   {"path":"styles.css","content":"body { margin: 0; }"}
               ]
@@ -102,22 +101,22 @@ jobs:
           python3 - <<'PY'
           import json
           d=json.load(open("broken-review.json"))
-          assert d["success"] is True
+          assert d["success"] is False
           assert d["review"]["passed"] is False
+          assert "Missing index.html entry point" in d["review"]["issues"]
           print("BROKEN REVIEW DETECTED OK")
+          print("ISSUES:", ", ".join(d["review"]["issues"]))
           print("WARNINGS:", len(d["review"].get("warnings", [])))
           PY
 
           python3 - <<'PY'
           import json
           files=json.load(open("broken-files.json"))["files"]
-          fixed=[]
-          for f in files:
-              content=f["content"]
-              if f["path"].endswith(".js"):
-                  content=content.replace("// TODO: implement later\n","")
-                  content=content.replace("console.log('placeholder');","console.log('ready');")
-              fixed.append({"path":f["path"],"content":content})
+          fixed=[
+              {"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Fixed Test</title></head><body><h1>Test</h1></body></html>"},
+              {"path":"app.js","content":"console.log('ready');"},
+              {"path":"styles.css","content":"body { margin: 0; padding: 0; font-family: sans-serif; }"}
+          ]
           json.dump({"files":fixed},open("fixed-files.json","w"))
           PY
 
