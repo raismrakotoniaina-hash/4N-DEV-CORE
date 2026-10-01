@@ -121,9 +121,33 @@ jobs:
           print("BUILDER OK | 10 credits")
           PY
 
+          echo "== 8. PLANNER -> BUILDER INTEGRATION =="
+          python3 - <<'PY'
+          import json
+          plan=json.load(open("builder-plan.json"))["plan"]
+          payload=json.dumps({
+              "prompt":"Create an e-commerce app with products, cart, checkout and admin dashboard",
+              "projectName":"Planner Builder Integration Test",
+              "plan":plan
+          })
+          open("planner-builder-payload.json","w").write(payload)
+          PY
+          request -X POST -H "Content-Type: application/json" \
+            -d @planner-builder-payload.json "$API/builder" > planner-builder.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("planner-builder.json"))
+          assert d["success"] and d["model"]=="4n-dev-demo-builder"
+          assert d["credits_used"]==10 and d["files"]
+          assert any(f["path"]=="index.html" and f["content"] for f in d["files"])
+          assert "ecommerce" in d["summary"].lower()
+          open("planner_builder_project_id.txt","w").write(d["project"]["id"])
+          print("PLANNER -> BUILDER OK | plan accepted | 10 credits")
+          PY
+
           PROJECT_ID=$(cat project_id.txt)
 
-          echo "== 8. PROJECT + FILE CRUD =="
+          echo "== 9. PROJECT + FILE CRUD =="
           request "$API/projects" > projects.json
           python3 - <<'PY'
           import json
@@ -189,19 +213,19 @@ jobs:
           print("PROJECT/FILE CRUD OK")
           PY
 
-          echo "== 9. FINAL CREDITS =="
+          echo "== 10. FINAL CREDITS =="
           request "$API/me" > after.json
           python3 - <<'PY'
           import json
           before=int(open("before.txt").read())
           after=json.load(open("after.json"))["developer"]["credits"]
-          assert after==before-29, f"Expected {before-27}, got {after}"
+          assert after==before-39, f"Expected {before-27}, got {after}"
           print("CREDITS OK | Before:", before, "| After:", after)
           print("ALL CORE API TESTS PASSED")
           PY
 
 
-          echo "== 10. PAPI CHECKOUT =="
+          echo "== 11. PAPI CHECKOUT =="
           request "$API/billing/providers" > billing-providers.json
           python3 - <<'PY'
           import json
