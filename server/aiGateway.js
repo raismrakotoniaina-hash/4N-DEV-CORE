@@ -362,6 +362,58 @@ ${JSON.stringify(repairInput)}`;
   };
 }
 
+
+export async function repairBuilderFiles({ prompt, plan = null, files, review }) {
+  if (useDemoProvider()) {
+    return {
+      model: "4n-dev-demo-builder-repair",
+      files: files.map((file) => {
+        if (!/\.html$/i.test(file.path)) return file;
+        let content = file.content;
+        if (!/<html[\s>]/i.test(content)) {
+          content = "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>" + content + "</body></html>";
+        } else if (!/<meta[^>]+viewport/i.test(content)) {
+          content = content.replace(/<head([^>]*)>/i, '<head$1><meta name="viewport" content="width=device-width,initial-scale=1">');
+        }
+        return { ...file, content };
+      }),
+      summary: "Demo repair completed.",
+      usage: { provider: "demo", repair: true }
+    };
+  }
+
+  const instructions = `Repair only the issues identified by this Builder review.
+Preserve working functionality and existing file paths.
+Return ONLY valid JSON with: {"summary":"...","files":[{"path":"...","content":"..."}]}.
+Never add secrets, API keys, credentials, or private environment values.
+User request: ${prompt}
+Plan: ${JSON.stringify(plan)}
+Review: ${JSON.stringify(review)}
+Files: ${JSON.stringify(files)}`;
+
+  const data = await openAIRequest(OPENAI_RESPONSES_URL, {
+    model: DEFAULT_MODEL,
+    input: [{ role: "user", content: [{ type: "input_text", text: instructions }] }],
+    max_output_tokens: 16000
+  });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(data.output_text || "{}");
+  } catch {
+    const error = new Error("Builder repair returned invalid JSON");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return {
+    model: data.model,
+    files: parsed.files || [],
+    summary: parsed.summary || "Builder repair completed.",
+    usage: data.usage || null
+  };
+}
+
 export async function generateBuilderResponse({ prompt, project = null, plan = null }) {
   if (useDemoProvider()) return demoBuilderResponse({ prompt, project, plan });
 
