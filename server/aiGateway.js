@@ -178,7 +178,7 @@ ${prompt}`;
   };
 }
 
-function demoBuilderResponse({ prompt, project = null }) {
+function demoBuilderResponse({ prompt, project = null, plan = null }) {
   const name = "4N DEV Demo Project";
   const description = "Demo Builder project generated without an external AI provider.";
   const html = `<!doctype html>
@@ -201,9 +201,11 @@ function demoBuilderResponse({ prompt, project = null }) {
     model: "4n-dev-demo-builder",
     name,
     description,
-    summary: project
-      ? "Demo Builder test completed using the existing project context."
-      : "Demo Builder test completed without an external AI provider.",
+    summary: plan
+      ? `Demo Builder generated from ${plan.project_type || "the provided"} planner output.`
+      : project
+        ? "Demo Builder test completed using the existing project context."
+        : "Demo Builder test completed without an external AI provider.",
     files: [{ path: "index.html", content: html }],
     usage: { provider: "demo" }
   };
@@ -282,8 +284,8 @@ export async function generateEmbedding(input) {
   };
 }
 
-export async function generateBuilderResponse({ prompt, project = null }) {
-  if (useDemoProvider()) return demoBuilderResponse({ prompt, project });
+export async function generateBuilderResponse({ prompt, project = null, plan = null }) {
+  if (useDemoProvider()) return demoBuilderResponse({ prompt, project, plan });
 
   const instructions = `You are the 4N DEV AI Builder engine.
 Generate a small, runnable web project from the user's request.
