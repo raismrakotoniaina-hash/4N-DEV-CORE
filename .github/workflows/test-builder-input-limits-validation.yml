@@ -1,0 +1,109 @@
+name: Builder Input Limits Validation
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  validate-builder-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Builder input limits and sanitization
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          API="https://fourn-dev-core.onrender.com/v1"
+          test -n "$CORE_API_KEY"
+
+          echo "=== EMPTY PROMPT ==="
+          status=$(curl --silent --show-error --max-time 90 -o empty-prompt.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-raw '{"prompt":""}'             "$API/builder")
+          cat empty-prompt.json
+          test "$status" = "400"
+          echo "EMPTY PROMPT REJECTED OK"
+
+          echo "=== WHITESPACE PROMPT ==="
+          status=$(curl --silent --show-error --max-time 90 -o whitespace-prompt.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-raw '{"prompt":"   "}'             "$API/builder")
+          cat whitespace-prompt.json
+          test "$status" = "400"
+          echo "WHITESPACE PROMPT REJECTED OK"
+
+          echo "=== OVERSIZED PROMPT ==="
+          python3 - <<'PY'
+          import json
+          prompt="x"*24001
+          json.dump({"prompt":prompt},open("oversized-prompt.json","w"))
+          PY
+          status=$(curl --silent --show-error --max-time 90 -o oversized-prompt-response.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @oversized-prompt.json             "$API/builder")
+          cat oversized-prompt-response.json
+          test "$status" = "400"
+          echo "OVERSIZED PROMPT REJECTED OK"
+
+          echo "=== PATH TRAVERSAL FILE ==="
+          python3 - <<'PY'
+          import json
+          payload={"prompt":"validate input","files":[{"path":"../escape.js","content":"console.log('x')"}]}
+          json.dump(payload,open("traversal.json","w"))
+          PY
+          status=$(curl --silent --show-error --max-time 90 -o traversal-response.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @traversal.json             "$API/builder/review")
+          cat traversal-response.json
+          test "$status" = "400"
+          echo "PATH TRAVERSAL REJECTED OK"
+
+          echo "=== ABSOLUTE PATH FILE ==="
+          python3 - <<'PY'
+          import json
+          payload={"files":[{"path":"/etc/passwd","content":"bad"}]}
+          json.dump(payload,open("absolute.json","w"))
+          PY
+          status=$(curl --silent --show-error --max-time 90 -o absolute-response.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @absolute.json             "$API/builder/review")
+          cat absolute-response.json
+          test "$status" = "400"
+          echo "ABSOLUTE PATH REJECTED OK"
+
+          echo "=== OVERSIZED FILE CONTENT ==="
+          python3 - <<'PY'
+          import json
+          payload={"files":[{"path":"index.html","content":"x"*200001}]}
+          json.dump(payload,open("oversized-file.json","w"))
+          PY
+          status=$(curl --silent --show-error --max-time 90 -o oversized-file-response.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @oversized-file.json             "$API/builder/review")
+          cat oversized-file-response.json
+          test "$status" = "400"
+          echo "OVERSIZED FILE REJECTED OK"
+
+          echo "=== DUPLICATE PATHS ==="
+          python3 - <<'PY'
+          import json
+          payload={"files":[
+            {"path":"index.html","content":"<html></html>"},
+            {"path":"index.html","content":"<html></html>"}
+          ]}
+          json.dump(payload,open("duplicate.json","w"))
+          PY
+          status=$(curl --silent --show-error --max-time 90 -o duplicate-response.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @duplicate.json             "$API/builder/review")
+          cat duplicate-response.json
+          test "$status" = "400"
+          echo "DUPLICATE PATH REJECTED OK"
+
+          echo "=== VALID REVIEW INPUT ==="
+          python3 - <<'PY'
+          import json
+          payload={"files":[
+            {"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body>OK</body></html>"},
+            {"path":"styles.css","content":"body{margin:0}"},
+            {"path":"app.js","content":"console.log('ok')"}
+          ]}
+          json.dump(payload,open("valid-review.json","w"))
+          PY
+          status=$(curl --silent --show-error --max-time 90 -o valid-review-response.json -w "%{http_code}"             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @valid-review.json             "$API/builder/review")
+          cat valid-review-response.json
+          test "$status" = "200"
+          python3 - <<'PY'
+          import json
+          d=json.load(open("valid-review-response.json"))
+          assert d["success"] is True, d
+          assert d["review"]["passed"] is True, d
+          print("VALID REVIEW INPUT ACCEPTED OK")
+          PY
+
+          echo "BUILDER INPUT LIMITS VALIDATION PASSED"
