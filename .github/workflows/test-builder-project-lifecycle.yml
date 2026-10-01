@@ -1,0 +1,207 @@
+name: Test Builder Project Lifecycle
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test-builder-project-lifecycle:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Builder project lifecycle
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          request() {
+            curl --fail-with-body --max-time 90 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          echo "== 1. CREATE PROJECT THROUGH BUILDER =="
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a simple business website with Home, Services, About and Contact pages","projectName":"Builder Project Lifecycle Test","plan":{"project_type":"business","goal":"Create a business website","pages":["Home","Services","About","Contact"],"features":["Responsive UI","Navigation","Contact form"],"data_models":[],"files":["index.html","styles.css","app.js"]}}' \
+            "$API/builder" > create.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("create.json"))
+          assert d["success"] is True
+          assert d["project"]["id"]
+          assert d["project"]["name"] == "Builder Project Lifecycle Test"
+          assert d["files"]
+          paths={f["path"] for f in d["files"]}
+          assert "index.html" in paths
+          print("CREATE OK")
+          print("PROJECT ID:", d["project"]["id"])
+          print("FILES:", ", ".join(sorted(paths)))
+          PY
+
+          PROJECT_ID=$(python3 -c 'import json; print(json.load(open("create.json"))["project"]["id"])')
+
+          echo "== 2. READ PROJECT AND FILES =="
+          request "$API/projects/$PROJECT_ID" > project.json
+          request "$API/projects/$PROJECT_ID/files" > files.json
+
+          python3 - <<'PY'
+          import json
+          p=json.load(open("project.json"))
+          f=json.load(open("files.json"))
+          assert p["success"] is True
+          assert p["project"]["id"]
+          assert f["success"] is True
+          assert f["files"]
+          assert "index.html" in {x["path"] for x in f["files"]}
+          print("PROJECT + FILES READ OK")
+          PY
+
+          echo "== 3. EXPLICIT BUILDER REVIEW =="
+          python3 - <<'PY'
+          import json
+          files=json.load(open("files.json"))["files"]
+          payload={"files":[{"path":x["path"],"content":x["content"]} for x in files]}
+          json.dump(payload,open("review-payload.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @review-payload.json \
+            "$API/builder/review" > review.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("review.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is True
+          print("REVIEW OK")
+          print("REVIEW PASSED:", d["review"]["passed"])
+          PY
+
+          echo "== 4. AUTO-FIX BROKEN FILES =="
+          python3 - <<'PY'
+          import json
+          payload={
+              "files":[
+                  {"path":"index.html","content":"<!doctype html><html><head><title>Broken Test</title></head><body><h1>Test</h1></body></html>"},
+                  {"path":"app.js","content":"// TODO: implement later\nconsole.log('placeholder');"},
+                  {"path":"styles.css","content":"body { margin: 0; }"}
+              ]
+          }
+          json.dump(payload,open("broken-files.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @broken-files.json \
+            "$API/builder/review" > broken-review.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("broken-review.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is False
+          print("BROKEN REVIEW DETECTED OK")
+          print("WARNINGS:", len(d["review"].get("warnings", [])))
+          PY
+
+          python3 - <<'PY'
+          import json
+          files=json.load(open("broken-files.json"))["files"]
+          fixed=[]
+          for f in files:
+              content=f["content"]
+              if f["path"].endswith(".js"):
+                  content=content.replace("// TODO: implement later\n","")
+                  content=content.replace("console.log('placeholder');","console.log('ready');")
+              fixed.append({"path":f["path"],"content":content})
+          json.dump({"files":fixed},open("fixed-files.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @fixed-files.json \
+            "$API/builder/review" > fixed-review.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("fixed-review.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is True
+          print("AUTO-FIX RE-REVIEW OK")
+          PY
+
+          echo "== 5. REUSE SAME PROJECT THROUGH BUILDER =="
+          python3 - <<'PY'
+          import json
+          pid=json.load(open("create.json"))["project"]["id"]
+          payload={
+              "prompt":"Improve the existing business website contact section",
+              "projectId":pid,
+              "plan":{
+                  "project_type":"business",
+                  "goal":"Improve an existing business website",
+                  "pages":["Home","Services","About","Contact"],
+                  "features":["Responsive UI","Navigation","Contact form"],
+                  "data_models":[],
+                  "files":["index.html","styles.css","app.js"]
+              }
+          }
+          json.dump(payload,open("update-payload.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @update-payload.json \
+            "$API/builder" > update.json
+
+          python3 - <<'PY'
+          import json
+          a=json.load(open("create.json"))
+          b=json.load(open("update.json"))
+          assert b["success"] is True
+          assert b["project"]["id"] == a["project"]["id"]
+          assert b["files"]
+          print("PROJECT UPDATE OK")
+          print("SAME PROJECT ID:", b["project"]["id"])
+          PY
+
+          echo "== 6. VERIFY UPDATED FILES =="
+          request "$API/projects/$PROJECT_ID/files" > final-files.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("final-files.json"))
+          assert d["success"] is True
+          assert d["files"]
+          paths=[f["path"] for f in d["files"]]
+          assert "index.html" in paths
+          assert len(paths) == len(set(paths))
+          print("UPDATED FILES OK")
+          print("FILE COUNT:", len(paths))
+          PY
+
+          echo "== 7. DELETE PROJECT =="
+          request -X DELETE "$API/projects/$PROJECT_ID" > delete.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("delete.json"))
+          assert d["success"] is True
+          print("PROJECT DELETE OK")
+          PY
+
+          echo "== 8. VERIFY PROJECT DELETED =="
+          if curl --fail-with-body --max-time 90 --silent --show-error \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API/projects/$PROJECT_ID" > deleted-project.json 2>/dev/null; then
+            echo "ERROR: deleted project is still readable"
+            exit 1
+          else
+            echo "PROJECT DELETION VERIFIED OK"
+          fi
+
+          echo "BUILDER PROJECT LIFECYCLE PASSED"
