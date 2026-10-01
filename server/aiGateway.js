@@ -93,13 +93,14 @@ function demoBuilderPlan(prompt) {
   const lower = text.toLowerCase();
 
   let type = "website";
-  if (/e-?commerce|boutique|shop|store/.test(lower)) type = "ecommerce";
-  else if (/dashboard|admin|back-office/.test(lower)) type = "dashboard";
-  else if (/booking|reservation|rendez-vous/.test(lower)) type = "booking";
-  else if (/invoice|facture|gestion|business/.test(lower)) type = "business";
-  else if (/chat|messagerie/.test(lower)) type = "chat";
-  else if (/education|cours|formation|school|école/.test(lower)) type = "education";
-  else if (/crud|inventory|stock|pos/.test(lower)) type = "crud";
+  if (/e-?commerce|boutique|shop|store|cart|checkout/.test(lower)) type = "ecommerce";
+  else if (/dashboard|admin|back-office|analytics/.test(lower)) type = "dashboard";
+  else if (/booking|reservation|rendez-vous|appointment/.test(lower)) type = "booking";
+  else if (/invoice|facture|billing|business|crm|client/.test(lower)) type = "business";
+  else if (/chat|messagerie|conversation/.test(lower)) type = "chat";
+  else if (/education|cours|formation|school|école|learning/.test(lower)) type = "education";
+  else if (/crud|inventory|stock|pos|caisse/.test(lower)) type = "crud";
+  else if (/mobile|pwa|progressive web app/.test(lower)) type = "mobile";
 
   const pagesByType = {
     website: ["Home", "About", "Contact"],
@@ -109,7 +110,8 @@ function demoBuilderPlan(prompt) {
     business: ["Dashboard", "Clients", "Invoices", "Settings"],
     chat: ["Inbox", "Conversation", "Profile"],
     education: ["Home", "Courses", "Course Detail", "Profile"],
-    crud: ["Dashboard", "List", "Create/Edit", "Settings"]
+    crud: ["Dashboard", "List", "Create/Edit", "Settings"],
+    mobile: ["Home", "Explore", "Detail", "Profile"]
   };
 
   return {
@@ -122,8 +124,9 @@ function demoBuilderPlan(prompt) {
       features: ["Responsive UI", "Navigation", "Reusable components", "Form validation"],
       data_models: type === "ecommerce" ? ["Product", "Cart", "Order"] :
         type === "booking" ? ["User", "Service", "Booking"] :
-        type === "business" ? ["Client", "Invoice"] :
-        type === "crud" ? ["Record", "User"] : ["User"],
+        type === "business" ? ["Client", "Invoice", "Activity"] :
+        type === "crud" ? ["Record", "User"] :
+        type === "mobile" ? ["User", "Item", "Preference"] : ["User"],
       files: ["index.html", "styles.css", "app.js"],
       next_step: "Send this plan to the Builder generator for implementation."
     },
