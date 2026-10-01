@@ -15,10 +15,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Builder API smoke test
         env:
@@ -28,15 +27,11 @@ jobs:
           set -e
 
           request() {
-            curl --fail-with-body --max-time 90 --silent --show-error \
-              -H "Authorization: Bearer $CORE_API_KEY" \
-              "$@"
+            curl --fail-with-body --max-time 90 --silent --show-error               -H "Authorization: Bearer $CORE_API_KEY"               "$@"
           }
 
           echo "== 1. BUILDER PLAN =="
-          request -X POST -H "Content-Type: application/json" \
-            -d '{"prompt":"Create a small e-commerce website with products, cart and checkout"}' \
-            "$API/builder/plan" > plan.json
+          request -X POST -H "Content-Type: application/json"             -d '{"prompt":"Create a small e-commerce website with products, cart and checkout"}'             "$API/builder/plan" > plan.json
 
           python3 - <<'PY'
           import json
@@ -59,8 +54,7 @@ jobs:
           json.dump(payload, open("builder-payload.json","w"))
           PY
 
-          request -X POST -H "Content-Type: application/json" \
-            -d @builder-payload.json "$API/builder" > builder.json
+          request -X POST -H "Content-Type: application/json"             -d @builder-payload.json "$API/builder" > builder.json
 
           python3 - <<'PY'
           import json
@@ -85,8 +79,7 @@ jobs:
           json.dump({"files": d["files"]}, open("review-payload.json","w"))
           PY
 
-          request -X POST -H "Content-Type: application/json" \
-            -d @review-payload.json "$API/builder/review" > review.json
+          request -X POST -H "Content-Type: application/json"             -d @review-payload.json "$API/builder/review" > review.json
 
           python3 - <<'PY'
           import json
@@ -199,13 +192,10 @@ jobs:
           NODE
 
           request() {
-            curl --fail-with-body --max-time 60 --silent --show-error \
-              -H "Authorization: Bearer $CORE_API_KEY" \
-              "$@"
+            curl --fail-with-body --max-time 60 --silent --show-error               -H "Authorization: Bearer $CORE_API_KEY"               "$@"
           }
 
-          request -X POST -H "Content-Type: application/json" \
-            -d @autofix-files.json "$API/builder/review" > autofix-review.json
+          request -X POST -H "Content-Type: application/json"             -d @autofix-files.json "$API/builder/review" > autofix-review.json
 
           python3 - <<'PY'
           import json
