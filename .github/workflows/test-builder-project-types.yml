@@ -1,0 +1,70 @@
+name: Test Builder Project Types
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-project-types:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Planner and Builder across project types
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+          request() {
+            curl --fail-with-body --max-time 90 --silent --show-error               -H "Authorization: Bearer $CORE_API_KEY" "$@"
+          }
+
+          test_type() {
+            TYPE="$1"
+            PROMPT="$2"
+            echo "== TEST: $TYPE =="
+
+            request -X POST -H "Content-Type: application/json"               -d "{\"prompt\":\"$PROMPT\"}"               "$API/builder/plan" > plan.json
+
+            python3 - "$TYPE" <<'PY'
+import json, sys
+expected=sys.argv[1]
+d=json.load(open("plan.json"))
+assert d["success"] is True, d
+assert d["plan"]["project_type"] == expected, d
+assert d["credits_used"] == 2, d
+print("PLANNER OK |", expected)
+PY
+
+            python3 - <<'PY'
+import json
+p=json.load(open("plan.json"))["plan"]
+payload={
+  "prompt": p["goal"],
+  "projectName": "Multi Project Type Test",
+  "plan": p
+}
+json.dump(payload, open("builder-payload.json","w"))
+PY
+
+            request -X POST -H "Content-Type: application/json"               -d @builder-payload.json "$API/builder" > builder.json
+
+            python3 - "$TYPE" <<'PY'
+import json, sys
+expected=sys.argv[1]
+d=json.load(open("builder.json"))
+assert d["success"] is True, d
+assert d["files"], d
+assert d["credits_used"] == 10, d
+assert d.get("review",{}).get("passed") is True, d
+paths={f["path"] for f in d["files"]}
+assert "index.html" in paths, paths
+print("BUILDER OK |", expected, "| files:", ", ".join(sorted(paths)))
+print("REVIEW OK | passed=True")
+PY
+          }
+
+          test_type "dashboard" "Create an admin dashboard with KPI cards, analytics, searchable data table, settings and responsive navigation"
+          test_type "booking" "Create a booking application with services, date and time selection, validation, confirmation and responsive navigation"
+          test_type "business" "Create a business CRM and invoice app with clients, invoices, dashboard KPIs, search, forms and settings"
+          test_type "crud" "Create an inventory management app with stock list, search, filters, create and edit forms and responsive dashboard"
+
+          echo "ALL BUILDER PROJECT TYPE TESTS PASSED"
