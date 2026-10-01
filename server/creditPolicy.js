@@ -21,7 +21,8 @@ const SERVICE_PRICING = {
   builder: {
     credits: 10,
     maxInputCharacters: 24000,
-    maxFiles: 40
+    maxFiles: 40,
+    maxTotalCharacters: 4000000
   }
 };
 
