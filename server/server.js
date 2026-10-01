@@ -124,6 +124,10 @@ app.get("/v1/me", requireApiKey(), (req, res) => {
   });
 });
 
+// Billing routes MUST be registered before generic /v1 routers.
+// Otherwise a generic API-key middleware can intercept the public PAPI webhook.
+app.use("/v1/billing", billingRouter);
+
 app.use("/v1", chatRouter);
 app.use("/v1", codingRouter);
 app.use("/v1", imageRouter);
@@ -134,7 +138,6 @@ app.use("/v1", creditPolicyRouter);
 app.use("/v1/projects", projectsRouter);
 app.use("/v1", filesRouter);
 app.use("/v1", builderRouter);
-app.use("/v1/billing", billingRouter);
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`4N DEV Core API running on port ${PORT}`);
