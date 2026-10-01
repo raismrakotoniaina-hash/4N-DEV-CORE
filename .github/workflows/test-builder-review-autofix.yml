@@ -1,0 +1,220 @@
+name: Test Builder Review Auto-Fix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-builder-review-autofix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Builder API smoke test
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          request() {
+            curl --fail-with-body --max-time 90 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          echo "== 1. BUILDER PLAN =="
+          request -X POST -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a small e-commerce website with products, cart and checkout"}' \
+            "$API/builder/plan" > plan.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("plan.json"))
+          assert d["success"] is True
+          assert d["plan"]["project_type"] == "ecommerce"
+          assert d["credits_used"] == 2
+          print("PLANNER OK | ecommerce | 2 credits")
+          PY
+
+          echo "== 2. BUILDER GENERATION =="
+          python3 - <<'PY'
+          import json
+          plan=json.load(open("plan.json"))["plan"]
+          payload={
+              "prompt":"Create a small e-commerce website with products, cart and checkout",
+              "projectName":"Builder Review Auto-Fix Test",
+              "plan":plan
+          }
+          json.dump(payload, open("builder-payload.json","w"))
+          PY
+
+          request -X POST -H "Content-Type: application/json" \
+            -d @builder-payload.json "$API/builder" > builder.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("builder.json"))
+          assert d["success"] is True
+          assert d["files"]
+          paths={f["path"] for f in d["files"]}
+          assert "index.html" in paths
+          assert "styles.css" in paths
+          assert "app.js" in paths
+          assert d["credits_used"] == 10
+          assert d.get("review",{}).get("passed") is True
+          print("BUILDER OK | files:", ", ".join(sorted(paths)))
+          print("INITIAL REVIEW:", d["review"]["passed"])
+          print("BUILDER CREDITS: 10")
+          PY
+
+          echo "== 3. EXPLICIT REVIEW =="
+          python3 - <<'PY'
+          import json
+          d=json.load(open("builder.json"))
+          json.dump({"files": d["files"]}, open("review-payload.json","w"))
+          PY
+
+          request -X POST -H "Content-Type: application/json" \
+            -d @review-payload.json "$API/builder/review" > review.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("review.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is True
+          assert d["review"]["checks"]["entry_point"] is True
+          assert d["review"]["checks"]["no_embedded_secrets"] is True
+          print("REVIEW OK | passed=True | no embedded secrets")
+          PY
+
+      - name: Auto-Fix engine test
+        env:
+          AI_PROVIDER: demo
+        run: |
+          set -e
+
+          node --input-type=module <<'NODE'
+          import { repairBuilderFiles } from "./server/aiGateway.js";
+
+          const brokenFiles = [
+            {
+              path: "index.html",
+              content: "<body><h1>Broken Builder Output</h1></body>"
+            },
+            {
+              path: "styles.css",
+              content: "body { margin: 0; }"
+            },
+            {
+              path: "app.js",
+              content: "console.log('autofix test');"
+            }
+          ];
+
+          const review = {
+            passed: false,
+            issues: ["Invalid HTML document structure: index.html"],
+            warnings: ["Missing mobile viewport: index.html"]
+          };
+
+          const result = await repairBuilderFiles({
+            files: brokenFiles,
+            review,
+            plan: {
+              project_type: "website",
+              goal: "Auto-Fix integration test",
+              pages: ["Home"],
+              features: ["Responsive UI"],
+              data_models: []
+            }
+          });
+
+          if (!result || !Array.isArray(result.files) || result.files.length !== 3) {
+            throw new Error("Auto-Fix did not return the expected files");
+          }
+
+          const html = result.files.find(f => f.path === "index.html")?.content || "";
+
+          if (!/<html[\s>]/i.test(html)) {
+            throw new Error("Auto-Fix did not repair HTML document structure");
+          }
+
+          if (!/<meta[^>]+viewport/i.test(html)) {
+            throw new Error("Auto-Fix did not add the mobile viewport");
+          }
+
+          if (/4ndev_sk_|CORE_API_KEY|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/i.test(
+            result.files.map(f => f.content).join("\n")
+          )) {
+            throw new Error("Auto-Fix introduced a potential secret");
+          }
+
+          console.log("AUTO-FIX OK | HTML structure repaired | viewport present | no secrets");
+          NODE
+
+      - name: Re-review Auto-Fixed output
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          node --input-type=module > autofix-files.json <<'NODE'
+          import { repairBuilderFiles } from "./server/aiGateway.js";
+
+          const files = [
+            { path: "index.html", content: "<body><h1>Broken Builder Output</h1></body>" },
+            { path: "styles.css", content: "body { margin: 0; }" },
+            { path: "app.js", content: "console.log('autofix test');" }
+          ];
+
+          const result = await repairBuilderFiles({
+            files,
+            review: {
+              passed: false,
+              issues: ["Invalid HTML document structure: index.html"],
+              warnings: ["Missing mobile viewport: index.html"]
+            },
+            plan: {
+              project_type: "website",
+              goal: "Auto-Fix integration test",
+              pages: ["Home"],
+              features: ["Responsive UI"],
+              data_models: []
+            }
+          });
+
+          process.stdout.write(JSON.stringify({files: result.files}));
+          NODE
+
+          request() {
+            curl --fail-with-body --max-time 60 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          request -X POST -H "Content-Type: application/json" \
+            -d @autofix-files.json "$API/builder/review" > autofix-review.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("autofix-review.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is True, d
+          assert d["review"]["checks"]["entry_point"] is True
+          assert d["review"]["checks"]["html_structure"] is True
+          assert d["review"]["checks"]["no_embedded_secrets"] is True
+          print("RE-REVIEW OK | Auto-Fixed output passed")
+          print("BUILDER -> REVIEW -> AUTO-FIX -> RE-REVIEW PASSED")
+          PY
