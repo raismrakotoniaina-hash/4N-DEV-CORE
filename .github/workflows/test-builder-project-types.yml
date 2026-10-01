@@ -45,3 +45,19 @@ jobs:
           grep -q '"success":true' result.json
           grep -q '"project_type":"business"' result.json
           echo "BUSINESS PLANNER TEST PASSED"
+
+  test-builder-generator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Builder Generator
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          curl --fail --silent --show-error --max-time 90 -X POST -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" --data-raw '{"prompt":"Create a simple business website with services, about section and contact form","plan":{"project_type":"business","goal":"Create a business website with services, about section and contact form","stack":["HTML","CSS","JavaScript"],"pages":["Home","Services","About","Contact"],"features":["Responsive UI","Navigation","Form validation"],"data_models":[],"files":["index.html","styles.css","app.js"]}}' https://fourn-dev-core.onrender.com/v1/builder > result.json
+          cat result.json
+          grep -q '"success":true' result.json
+          grep -q '"files"' result.json
+          grep -q '"project"' result.json
+          grep -q '"index.html"' result.json
+          echo "BUILDER GENERATOR TEST PASSED"
