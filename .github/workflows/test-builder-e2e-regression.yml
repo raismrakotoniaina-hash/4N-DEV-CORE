@@ -1,0 +1,184 @@
+name: Test Builder E2E Regression
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test-builder-e2e-regression:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Builder end-to-end regression
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          request() {
+            curl --fail-with-body --max-time 90 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          echo "== 1. PLANNER =="
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a responsive business website with Home, Services, About and Contact pages, navigation and contact form"}' \
+            "$API/builder/plan" > plan.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("plan.json"))
+          assert d["success"] is True
+          assert d["plan"]["project_type"] == "business"
+          assert d["plan"]["pages"]
+          assert d["plan"]["files"]
+          print("PLANNER OK")
+          print("PROJECT TYPE:", d["plan"]["project_type"])
+          print("PAGES:", ", ".join(d["plan"]["pages"]))
+          PY
+
+          echo "== 2. BUILDER GENERATION =="
+          python3 - <<'PY'
+          import json
+          plan=json.load(open("plan.json"))["plan"]
+          payload={
+              "prompt":"Create the planned responsive business website",
+              "projectName":"Builder E2E Regression Test",
+              "plan":plan
+          }
+          json.dump(payload,open("builder-payload.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @builder-payload.json \
+            "$API/builder" > builder.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("builder.json"))
+          assert d["success"] is True
+          assert d["project"]["id"]
+          assert d["project"]["name"] == "Builder E2E Regression Test"
+          assert d["files"]
+          assert d["credits_used"] == 10
+          assert d["review"]["passed"] is True
+          paths={f["path"] for f in d["files"]}
+          assert "index.html" in paths
+          print("BUILDER GENERATION OK")
+          print("PROJECT ID:", d["project"]["id"])
+          print("FILES:", ", ".join(sorted(paths)))
+          print("REVIEW:", d["review"]["passed"])
+          PY
+
+          PROJECT_ID=$(python3 -c 'import json; print(json.load(open("builder.json"))["project"]["id"])')
+
+          echo "== 3. REVIEW PERSISTED FILES =="
+          request "$API/projects/$PROJECT_ID/files" > files.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("files.json"))
+          assert d["success"] is True
+          assert d["files"]
+          assert "index.html" in {f["path"] for f in d["files"]}
+          payload={"files":[{"path":f["path"],"content":f["content"]} for f in d["files"]]}
+          json.dump(payload,open("review-payload.json","w"))
+          print("PERSISTED FILES READ OK")
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @review-payload.json \
+            "$API/builder/review" > review.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("review.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is True
+          print("PERSISTED FILE REVIEW OK")
+          PY
+
+          echo "== 4. BUILDER UPDATE SAME PROJECT =="
+          python3 - <<'PY'
+          import json
+          pid=json.load(open("builder.json"))["project"]["id"]
+          plan=json.load(open("plan.json"))["plan"]
+          payload={
+              "prompt":"Improve the Contact section and navigation of the existing business website",
+              "projectId":pid,
+              "plan":plan
+          }
+          json.dump(payload,open("update-payload.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @update-payload.json \
+            "$API/builder" > update.json
+
+          python3 - <<'PY'
+          import json
+          original=json.load(open("builder.json"))
+          updated=json.load(open("update.json"))
+          assert updated["success"] is True
+          assert updated["project"]["id"] == original["project"]["id"]
+          assert updated["files"]
+          assert updated["review"]["passed"] is True
+          print("SAME PROJECT UPDATE OK")
+          print("PROJECT ID:", updated["project"]["id"])
+          PY
+
+          echo "== 5. VERIFY FILES AFTER UPDATE =="
+          request "$API/projects/$PROJECT_ID/files" > updated-files.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("updated-files.json"))
+          assert d["success"] is True
+          assert d["files"]
+          paths=[f["path"] for f in d["files"]]
+          assert "index.html" in paths
+          assert len(paths) == len(set(paths))
+          print("UPDATED FILES VERIFIED OK")
+          print("FILE COUNT:", len(paths))
+          PY
+
+          echo "== 6. SECURITY REGRESSION =="
+          HTTP_CODE=$(curl --max-time 30 --silent --output security.json --write-out "%{http_code}" \
+            "$API/projects/$PROJECT_ID")
+
+          test "$HTTP_CODE" = "401" || {
+            echo "Expected 401 without API key, got $HTTP_CODE"
+            cat security.json
+            exit 1
+          }
+
+          echo "SECURITY REGRESSION OK"
+
+          echo "== 7. DELETE PROJECT =="
+          request -X DELETE "$API/projects/$PROJECT_ID" > delete.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("delete.json"))
+          assert d["success"] is True
+          print("DELETE OK")
+          PY
+
+          echo "== 8. VERIFY DELETE =="
+          HTTP_CODE=$(curl --max-time 30 --silent --output deleted.json --write-out "%{http_code}" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API/projects/$PROJECT_ID")
+
+          test "$HTTP_CODE" = "404" || {
+            echo "Expected 404 after deletion, got $HTTP_CODE"
+            cat deleted.json
+            exit 1
+          }
+
+          echo "DELETE VERIFICATION OK"
+          echo "BUILDER E2E REGRESSION PASSED"
