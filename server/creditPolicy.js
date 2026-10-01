@@ -18,6 +18,10 @@ const SERVICE_PRICING = {
     credits: 1,
     maxInputCharacters: 20000
   },
+  planner: {
+    credits: 2,
+    maxInputCharacters: 12000
+  },
   builder: {
     credits: 10,
     maxInputCharacters: 24000,
