@@ -88,6 +88,96 @@ function demoImage(prompt, quality) {
   };
 }
 
+function demoBuilderPlan(prompt) {
+  const text = String(prompt || "").trim();
+  const lower = text.toLowerCase();
+
+  let type = "website";
+  if (/e-?commerce|boutique|shop|store/.test(lower)) type = "ecommerce";
+  else if (/dashboard|admin|back-office/.test(lower)) type = "dashboard";
+  else if (/booking|reservation|rendez-vous/.test(lower)) type = "booking";
+  else if (/invoice|facture|gestion|business/.test(lower)) type = "business";
+  else if (/chat|messagerie/.test(lower)) type = "chat";
+  else if (/education|cours|formation|school|école/.test(lower)) type = "education";
+  else if (/crud|inventory|stock|pos/.test(lower)) type = "crud";
+
+  const pagesByType = {
+    website: ["Home", "About", "Contact"],
+    ecommerce: ["Home", "Products", "Product Detail", "Cart", "Checkout"],
+    dashboard: ["Dashboard", "Analytics", "Settings"],
+    booking: ["Home", "Services", "Booking", "Confirmation"],
+    business: ["Dashboard", "Clients", "Invoices", "Settings"],
+    chat: ["Inbox", "Conversation", "Profile"],
+    education: ["Home", "Courses", "Course Detail", "Profile"],
+    crud: ["Dashboard", "List", "Create/Edit", "Settings"]
+  };
+
+  return {
+    model: "4n-dev-demo-planner",
+    plan: {
+      project_type: type,
+      goal: text.slice(0, 500),
+      stack: ["HTML", "CSS", "JavaScript"],
+      pages: pagesByType[type] || pagesByType.website,
+      features: ["Responsive UI", "Navigation", "Reusable components", "Form validation"],
+      data_models: type === "ecommerce" ? ["Product", "Cart", "Order"] :
+        type === "booking" ? ["User", "Service", "Booking"] :
+        type === "business" ? ["Client", "Invoice"] :
+        type === "crud" ? ["Record", "User"] : ["User"],
+      files: ["index.html", "styles.css", "app.js"],
+      next_step: "Send this plan to the Builder generator for implementation."
+    },
+    usage: { provider: "demo", input_characters: text.length }
+  };
+}
+
+async function generateBuilderPlan({ prompt }) {
+  if (useDemoProvider()) return demoBuilderPlan(prompt);
+
+  const instructions = `You are the 4N DEV AI Builder Planner.
+Turn the user's app request into a precise implementation plan.
+Return ONLY valid JSON with this exact shape:
+{
+  "project_type": "website|ecommerce|dashboard|booking|business|chat|education|crud|other",
+  "goal": "short goal",
+  "stack": ["..."],
+  "pages": ["..."],
+  "features": ["..."],
+  "data_models": ["..."],
+  "files": ["..."],
+  "next_step": "..."
+}
+Rules:
+- Infer the application type from the request.
+- Choose a practical stack appropriate to the request.
+- List concrete pages, features, data models, and expected files.
+- Do not write file contents yet.
+- Do not include markdown fences or text outside JSON.
+User request:
+${prompt}`;
+
+  const data = await openAIRequest(OPENAI_RESPONSES_URL, {
+    model: DEFAULT_MODEL,
+    input: [{ role: "user", content: [{ type: "input_text", text: instructions }] }],
+    max_output_tokens: 3000
+  });
+
+  let plan;
+  try {
+    plan = JSON.parse(data.output_text || "{}");
+  } catch {
+    const error = new Error("Builder Planner returned invalid JSON");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return {
+    model: data.model,
+    plan,
+    usage: data.usage || null
+  };
+}
+
 function demoBuilderResponse({ prompt, project = null }) {
   const name = "4N DEV Demo Project";
   const description = "Demo Builder project generated without an external AI provider.";
