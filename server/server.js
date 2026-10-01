@@ -58,6 +58,16 @@ app.get("/v1", (_req, res) => {
   });
 });
 
+// Deployment diagnostic: confirms that the current server.js is running in Render.
+app.post("/v1/billing/route-check", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    route: "billing-route-check",
+    server: "4N DEV Core",
+    diagnostic: "current-server-js"
+  });
+});
+
 app.post("/v1/keys", (req, res) => {
   const adminSecret = process.env.CORE_ADMIN_SECRET;
   const suppliedSecret = req.get("x-core-admin-secret");
