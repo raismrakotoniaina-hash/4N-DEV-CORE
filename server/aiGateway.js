@@ -312,7 +312,7 @@ ${project ? JSON.stringify(project) : "none"}`;
   const data = await openAIRequest(OPENAI_RESPONSES_URL, {
     model: DEFAULT_MODEL,
     input: [{ role: "user", content: [{ type: "input_text", text: instructions }] }],
-    max_output_tokens: 8000
+    max_output_tokens: 16000
   });
 
   let parsed;
