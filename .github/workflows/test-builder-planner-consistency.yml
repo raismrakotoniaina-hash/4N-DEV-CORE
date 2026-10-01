@@ -1,0 +1,96 @@
+name: Builder Planner Consistency Validation
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  validate-planner-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          API="https://fourn-dev-core.onrender.com/v1"
+
+          test -n "$CORE_API_KEY"
+
+          echo "=== DASHBOARD ==="
+          curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw '{"prompt":"Create an admin dashboard with KPI cards, analytics and settings"}' \
+            "$API/builder/plan" > dashboard.json
+          cat dashboard.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("dashboard.json"))
+          assert d["success"] is True, d
+          p=d["plan"]
+          assert p["project_type"] == "dashboard", p
+          assert isinstance(p["pages"], list) and len(p["pages"]) >= 2, p
+          assert isinstance(p["features"], list) and len(p["features"]) >= 1, p
+          assert isinstance(p["files"], list) and "index.html" in p["files"], p
+          print("DASHBOARD CONSISTENCY OK")
+          PY
+
+          echo "=== BOOKING ==="
+          curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw '{"prompt":"Create a booking website for appointments with calendar, available time slots and customer booking form"}' \
+            "$API/builder/plan" > booking.json
+          cat booking.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("booking.json"))
+          assert d["success"] is True, d
+          p=d["plan"]
+          assert p["project_type"] == "booking", p
+          assert isinstance(p["pages"], list) and len(p["pages"]) >= 2, p
+          assert isinstance(p["features"], list) and len(p["features"]) >= 1, p
+          assert isinstance(p["files"], list) and "index.html" in p["files"], p
+          print("BOOKING CONSISTENCY OK")
+          PY
+
+          echo "=== BUSINESS ==="
+          curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data-raw '{"prompt":"Create a business website for a company with services, about page, contact form and company information"}' \
+            "$API/builder/plan" > business.json
+          cat business.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("business.json"))
+          assert d["success"] is True, d
+          p=d["plan"]
+          assert p["project_type"] == "business", p
+          assert isinstance(p["pages"], list) and len(p["pages"]) >= 2, p
+          assert isinstance(p["features"], list) and len(p["features"]) >= 1, p
+          assert isinstance(p["files"], list) and "index.html" in p, p
+          print("BUSINESS CONSISTENCY OK")
+          PY
+
+          echo "=== SCHEMA CONSISTENCY ==="
+          python3 - <<'PY'
+          import json
+          for name in ("dashboard","booking","business"):
+              d=json.load(open(name+".json"))
+              p=d["plan"]
+              required=("project_type","goal","stack","pages","features","data_models","files","next_step")
+              for key in required:
+                  assert key in p, (name,key,p)
+              assert isinstance(p["project_type"], str) and p["project_type"], p
+              assert isinstance(p["goal"], str) and p["goal"], p
+              for key in ("stack","pages","features","data_models","files"):
+                  assert isinstance(p[key], list), (name,key,p)
+              assert isinstance(p["next_step"], str) and p["next_step"], p
+          print("PLANNER SCHEMA CONSISTENCY OK")
+          PY
+
+          echo "BUILDER PLANNER CONSISTENCY VALIDATION PASSED"
