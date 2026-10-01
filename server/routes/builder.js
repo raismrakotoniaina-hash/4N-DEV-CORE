@@ -104,7 +104,7 @@ router.post("/builder/plan", requireApiKey("coding"), requirePlanFeature("coding
 
 router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
   try {
-    const { prompt, projectId, projectName } = req.body || {};
+    const { prompt, projectId, projectName, plan } = req.body || {};
 
     if (typeof prompt !== "string" || !prompt.trim()) {
       return res.status(400).json({ success: false, error: "prompt is required" });
@@ -138,6 +138,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
 
     const result = await generateBuilderResponse({
       prompt,
+      plan: plan && typeof plan === "object" ? plan : null,
       project: project ? { id: project.id, name: project.name, description: project.description } : null
     });
 
