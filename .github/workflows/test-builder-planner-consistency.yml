@@ -70,9 +70,10 @@ jobs:
           assert d["success"] is True, d
           p=d["plan"]
           assert p["project_type"] == "business", p
+          assert isinstance(p["goal"], str) and p["goal"], p
           assert isinstance(p["pages"], list) and len(p["pages"]) >= 2, p
           assert isinstance(p["features"], list) and len(p["features"]) >= 1, p
-          assert isinstance(p["files"], list) and "index.html" in p, p
+          assert isinstance(p["files"], list) and "index.html" in p["files"], p
           print("BUSINESS CONSISTENCY OK")
           PY
 
