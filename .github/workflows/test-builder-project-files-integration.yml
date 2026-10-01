@@ -1,0 +1,121 @@
+name: Test Builder Project Files Integration
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test-builder-project-files-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Builder to Project Files integration
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          request() {
+            curl --fail-with-body --max-time 90 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          echo "== 1. CREATE PROJECT THROUGH BUILDER =="
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a simple business website with Home, Services, About and Contact pages","projectName":"Builder Project Files Integration Test","plan":{"project_type":"business","goal":"Create a business website","pages":["Home","Services","About","Contact"],"features":["Responsive UI","Navigation","Form validation"],"data_models":[],"files":["index.html","styles.css","app.js"]}}' \
+            "$API/builder" > builder-create.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("builder-create.json"))
+          assert d["success"] is True
+          assert d["project"]["id"]
+          assert d["project"]["name"] == "Builder Project Files Integration Test"
+          assert d["files"]
+          paths={f["path"] for f in d["files"]}
+          assert "index.html" in paths
+          print("BUILDER PROJECT CREATE OK")
+          print("PROJECT ID:", d["project"]["id"])
+          print("FILES:", ", ".join(sorted(paths)))
+          PY
+
+          PROJECT_ID=$(python3 -c 'import json; print(json.load(open("builder-create.json"))["project"]["id"])')
+
+          echo "== 2. READ PROJECT FILES THROUGH CRUD API =="
+          request "$API/projects/$PROJECT_ID/files" > files-after-builder.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("files-after-builder.json"))
+          assert d["success"] is True
+          assert d["files"]
+          paths={f["path"] for f in d["files"]}
+          assert "index.html" in paths
+          print("PROJECT FILES PERSISTENCE OK")
+          print("FILES:", ", ".join(sorted(paths)))
+          PY
+
+          echo "== 3. READ PROJECT THROUGH CRUD API =="
+          request "$API/projects/$PROJECT_ID" > project-after-builder.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("project-after-builder.json"))
+          assert d["success"] is True
+          assert d["project"]["id"]
+          assert d["project"]["name"] == "Builder Project Files Integration Test"
+          print("PROJECT CRUD LINK OK")
+          PY
+
+          echo "== 4. REUSE SAME PROJECT WITH BUILDER =="
+          python3 - <<'PY'
+          import json
+          payload={
+              "prompt":"Improve the existing business website with a stronger contact section",
+              "projectId": json.load(open("builder-create.json"))["project"]["id"],
+              "plan": {
+                  "project_type":"business",
+                  "goal":"Improve an existing business website",
+                  "pages":["Home","Services","About","Contact"],
+                  "features":["Responsive UI","Navigation","Contact form"],
+                  "data_models":[],
+                  "files":["index.html","styles.css","app.js"]
+              }
+          }
+          json.dump(payload, open("builder-update-payload.json","w"))
+          PY
+
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d @builder-update-payload.json \
+            "$API/builder" > builder-update.json
+
+          python3 - <<'PY'
+          import json
+          created=json.load(open("builder-create.json"))
+          updated=json.load(open("builder-update.json"))
+          assert updated["success"] is True
+          assert updated["project"]["id"] == created["project"]["id"]
+          assert updated["files"]
+          assert updated.get("credits_used") == 10
+          print("BUILDER PROJECT REUSE OK")
+          print("SAME PROJECT ID:", updated["project"]["id"])
+          PY
+
+          echo "== 5. VERIFY UPDATED PROJECT FILES =="
+          request "$API/projects/$PROJECT_ID/files" > files-after-update.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("files-after-update.json"))
+          assert d["success"] is True
+          assert d["files"]
+          assert any(f["path"] == "index.html" for f in d["files"])
+          assert len({f["path"] for f in d["files"]}) == len(d["files"])
+          print("UPDATED FILES VERIFIED OK")
+          print("FILE COUNT:", len(d["files"]))
+          PY
+
+          echo "BUILDER -> PROJECT -> FILES INTEGRATION PASSED"
