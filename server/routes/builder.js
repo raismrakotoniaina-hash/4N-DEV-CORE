@@ -14,6 +14,50 @@ const BUILDER_LIMITS = getServiceLimit("builder");
 const PLANNER_COST = getServicePrice("planner");
 const PLANNER_LIMITS = getServiceLimit("planner");
 
+function reviewGeneratedFiles(files) {
+  const paths = new Set(files.map(file => file.path));
+  const issues = [];
+  const warnings = [];
+
+  if (!paths.has("index.html")) {
+    issues.push("Missing index.html entry point");
+  }
+
+  const htmlFiles = files.filter(file => /\\.html$/i.test(file.path));
+  const jsFiles = files.filter(file => /\\.js$/i.test(file.path));
+  const cssFiles = files.filter(file => /\\.css$/i.test(file.path));
+
+  for (const file of htmlFiles) {
+    if (!/<html[\\s>]/i.test(file.content)) issues.push(`Invalid HTML document structure: ${file.path}`);
+    if (!/<meta[^>]+viewport/i.test(file.content)) warnings.push(`Missing mobile viewport: ${file.path}`);
+  }
+
+  for (const file of jsFiles) {
+    if (/TODO|coming soon|placeholder/i.test(file.content)) warnings.push(`Placeholder text detected: ${file.path}`);
+  }
+
+  for (const file of cssFiles) {
+    if (file.content.length < 40) warnings.push(`Very small stylesheet: ${file.path}`);
+  }
+
+  const allContent = files.map(file => file.content).join("\\n");
+  if (/4ndev_sk_|CORE_API_KEY|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/i.test(allContent)) {
+    issues.push("Potential secret or API key detected in generated files");
+  }
+
+  return {
+    passed: issues.length === 0,
+    issues,
+    warnings,
+    files_checked: files.length,
+    checks: {
+      entry_point: paths.has("index.html"),
+      html_structure: htmlFiles.every(file => /<html[\\s>]/i.test(file.content)),
+      no_embedded_secrets: !issues.some(issue => /secret|api key/i.test(issue))
+    }
+  };
+}
+
 function cleanFiles(files) {
   if (!Array.isArray(files)) return [];
 
@@ -102,6 +146,21 @@ router.post("/builder/plan", requireApiKey("coding"), requirePlanFeature("coding
   }
 });
 
+router.post("/builder/review", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
+  try {
+    const files = cleanFiles(req.body?.files);
+    if (!files.length) {
+      return res.status(400).json({ success: false, error: "files are required" });
+    }
+
+    const review = reviewGeneratedFiles(files);
+    return res.json({ success: review.passed, review });
+  } catch (error) {
+    console.error("4N DEV Builder review error:", error.message);
+    return res.status(500).json({ success: false, error: error.message || "Builder review error" });
+  }
+});
+
 router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
   try {
     const { prompt, projectId, projectName, plan } = req.body || {};
@@ -168,6 +227,15 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
+    const review = reviewGeneratedFiles(files);
+    if (!review.passed) {
+      return res.status(502).json({
+        success: false,
+        error: "Builder output failed quality review",
+        review
+      });
+    }
+
     if (!project) {
       const name = typeof projectName === "string" && projectName.trim()
         ? projectName.trim().slice(0, 120)
@@ -220,6 +288,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       files: savedFiles,
       summary: result.summary || (plan && typeof plan.project_type === "string" ? `Planner-driven ${plan.project_type} project generated.` : ""),
       planner_project_type: plan?.project_type || null,
+      review,
       model: result.model,
       usage: result.usage,
       credits_used: BUILDER_COST,
