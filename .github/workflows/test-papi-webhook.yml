@@ -101,23 +101,30 @@ jobs:
           echo "Timestamp generated: true"
           echo "Signature generated: true"
 
-          echo "== 6. VERIFY RENDER ROUTE WITHOUT API KEY =="
+          echo "== 6. VERIFY CURRENT RENDER SERVER VERSION =="
 
           ROUTE_CHECK_FILE=$(mktemp)
-          ROUTE_STATUS=$(curl -sS -o "$ROUTE_CHECK_FILE" -w "%{http_code}" -X POST "$API_URL/v1/billing/webhooks/papi" -H "Content-Type: application/json" -H "X-Papi-Signature: t=0,v1=invalid" --data-binary "$PAYLOAD")
+          ROUTE_STATUS=$(curl -sS -o "$ROUTE_CHECK_FILE" -w "%{http_code}" -X POST "$API_URL/v1/billing/route-check" -H "Content-Type: application/json" --data-binary '{}')
 
           cat "$ROUTE_CHECK_FILE" | jq .
           echo "ROUTE_STATUS=$ROUTE_STATUS"
 
-          if [ "$ROUTE_STATUS" = "401" ]; then
-            echo "ERROR: Render is still applying requireApiKey() to the PAPI webhook."
-            echo "The deployed Render version does not match the current repository webhook route."
+          if [ "$ROUTE_STATUS" != "200" ]; then
+            echo "ERROR: Render is not running the current server.js diagnostic route."
+            echo "Expected HTTP 200 from /v1/billing/route-check."
             exit 1
           fi
 
-          echo "Webhook route accepts unauthenticated requests: true"
+          ROUTE_DIAGNOSTIC=$(jq -r '.diagnostic' "$ROUTE_CHECK_FILE")
 
-          echo "== 6. SEND SIGNED WEBHOOK =="
+          if [ "$ROUTE_DIAGNOSTIC" != "current-server-js" ]; then
+            echo "ERROR: Unexpected diagnostic response."
+            exit 1
+          fi
+
+          echo "CURRENT SERVER.JS VERIFIED"
+
+          echo "== 7. SEND SIGNED WEBHOOK =="
 
           RESPONSE_FILE=$(mktemp)
 
@@ -145,7 +152,7 @@ jobs:
 
           echo "PAPI WEBHOOK SIGNATURE VERIFIED"
 
-          echo "== 7. VERIFY CREDITS =="
+          echo "== 8. VERIFY CREDITS =="
 
           AFTER=$(curl -sS \
             -H "Authorization: Bearer $CORE_API_KEY" \
