@@ -1,7 +1,7 @@
 import express from "express";
 import { requireApiKey } from "../middleware/apiKey.js";
 import { requirePlanFeature } from "../middleware/planFeature.js";
-import { generateBuilderResponse } from "../aiGateway.js";
+import { generateBuilderResponse, generateBuilderPlan } from "../aiGateway.js";
 import { getProject, createProject } from "../projects.js";
 import { upsertFile } from "../files.js";
 import { recordUsage } from "../usage.js";
@@ -11,6 +11,8 @@ import { getServicePrice, getServiceLimit } from "../creditPolicy.js";
 const router = express.Router();
 const BUILDER_COST = getServicePrice("builder");
 const BUILDER_LIMITS = getServiceLimit("builder");
+const PLANNER_COST = getServicePrice("planner");
+const PLANNER_LIMITS = getServiceLimit("planner");
 
 function cleanFiles(files) {
   if (!Array.isArray(files)) return [];
@@ -38,6 +40,67 @@ function cleanFiles(files) {
 
   return cleaned;
 }
+
+router.post("/builder/plan", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
+  try {
+    const { prompt } = req.body || {};
+
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ success: false, error: "prompt is required" });
+    }
+
+    if (prompt.length > PLANNER_LIMITS.maxInputCharacters) {
+      return res.status(413).json({
+        success: false,
+        error: "Planner prompt is too large",
+        max_characters: PLANNER_LIMITS.maxInputCharacters
+      });
+    }
+
+    const balance = getBalance(req.apiKey.id);
+    if (balance < PLANNER_COST) {
+      return res.status(402).json({
+        success: false,
+        error: "Insufficient 4N DEV credits",
+        credits: balance,
+        credits_required: PLANNER_COST
+      });
+    }
+
+    const result = await generateBuilderPlan({ prompt });
+    const remaining = spendCredits(req.apiKey.id, PLANNER_COST, "builder_planner");
+
+    if (remaining === null) {
+      return res.status(402).json({
+        success: false,
+        error: "Insufficient 4N DEV credits",
+        credits: getBalance(req.apiKey.id),
+        credits_required: PLANNER_COST
+      });
+    }
+
+    recordUsage({
+      apiKeyId: req.apiKey.id,
+      endpoint: "/v1/builder/plan",
+      usage: { ...result.usage, credits_used: PLANNER_COST, credits_remaining: remaining }
+    });
+
+    return res.json({
+      success: true,
+      plan: result.plan,
+      model: result.model,
+      usage: result.usage,
+      credits_used: PLANNER_COST,
+      credits_remaining: remaining
+    });
+  } catch (error) {
+    console.error("4N DEV Builder Planner error:", error.message);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || "AI Builder Planner error"
+    });
+  }
+});
 
 router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
   try {
