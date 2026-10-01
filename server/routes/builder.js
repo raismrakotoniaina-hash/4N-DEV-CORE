@@ -14,19 +14,29 @@ const BUILDER_LIMITS = getServiceLimit("builder");
 
 function cleanFiles(files) {
   if (!Array.isArray(files)) return [];
-  return files
-    .filter(file => file && typeof file.path === "string" && typeof file.content === "string")
-    .map(file => ({
-      path: file.path.trim().replaceAll("\\", "/"),
-      content: file.content
-    }))
-    .filter(file =>
-      file.path &&
-      file.path.length <= 300 &&
-      !file.path.startsWith("/") &&
-      !file.path.includes("..") &&
-      file.content.length <= 200000
-    );
+
+  const seen = new Set();
+  const cleaned = [];
+
+  for (const file of files) {
+    if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
+
+    const filePath = file.path.trim().replaceAll("\\", "/");
+    if (
+      !filePath ||
+      filePath.length > 300 ||
+      filePath.startsWith("/") ||
+      filePath.includes("..") ||
+      filePath.includes("\\0") ||
+      file.content.length > 200000
+    ) continue;
+
+    if (seen.has(filePath)) continue;
+    seen.add(filePath);
+    cleaned.push({ path: filePath, content: file.content });
+  }
+
+  return cleaned;
 }
 
 router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
@@ -76,6 +86,24 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
+    if (files.length > BUILDER_LIMITS.maxFiles) {
+      return res.status(502).json({
+        success: false,
+        error: "Builder returned too many files",
+        max_files: BUILDER_LIMITS.maxFiles,
+        files_returned: files.length
+      });
+    }
+
+    const totalCharacters = files.reduce((sum, file) => sum + file.content.length, 0);
+    if (totalCharacters > BUILDER_LIMITS.maxTotalCharacters) {
+      return res.status(502).json({
+        success: false,
+        error: "Builder output is too large",
+        max_total_characters: BUILDER_LIMITS.maxTotalCharacters
+      });
+    }
+
     if (!project) {
       const name = typeof projectName === "string" && projectName.trim()
         ? projectName.trim().slice(0, 120)
@@ -86,17 +114,28 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       project = createProject(req.apiKey.id, name, typeof result.description === "string" ? result.description.slice(0, 2000) : "");
     }
 
-    const savedFiles = files.map(file =>
-      upsertFile(req.apiKey.id, project.id, file.path, file.content)
-    );
-
+    // Validate credit availability again immediately before persistence.
+    // This prevents a stale balance check from allowing a build without credits.
     const balanceAfter = spendCredits(req.apiKey.id, BUILDER_COST, "builder_usage");
     if (balanceAfter === null) {
       return res.status(402).json({
         success: false,
         error: "Insufficient 4N DEV credits",
-        credits: balanceBefore,
+        credits: getBalance(req.apiKey.id),
         credits_required: BUILDER_COST
+      });
+    }
+
+    let savedFiles;
+    try {
+      savedFiles = files.map(file =>
+        upsertFile(req.apiKey.id, project.id, file.path, file.content)
+      );
+    } catch (error) {
+      console.error("4N DEV Builder persistence error:", error.message);
+      return res.status(500).json({
+        success: false,
+        error: "Builder output could not be saved after credit reservation"
       });
     }
 
