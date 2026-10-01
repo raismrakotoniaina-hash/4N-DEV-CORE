@@ -1,0 +1,237 @@
+name: Test Builder Security Validation
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test-builder-security-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Builder security and validation
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          raw_request() {
+            curl --max-time 90 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          echo "== 1. API KEY PROTECTION =="
+          HTTP_CODE=$(curl --max-time 30 --silent --output no-key.json --write-out "%{http_code}" \
+            "$API/projects")
+
+          test "$HTTP_CODE" = "401" || {
+            echo "Expected 401 without API key, got $HTTP_CODE"
+            cat no-key.json
+            exit 1
+          }
+
+          echo "API KEY PROTECTION OK"
+
+          echo "== 2. INVALID API KEY =="
+          HTTP_CODE=$(curl --max-time 30 --silent --output invalid-key.json --write-out "%{http_code}" \
+            -H "Authorization: Bearer invalid-test-key" \
+            "$API/projects")
+
+          test "$HTTP_CODE" = "401" || {
+            echo "Expected 401 for invalid API key, got $HTTP_CODE"
+            cat invalid-key.json
+            exit 1
+          }
+
+          echo "INVALID API KEY REJECTED OK"
+
+          echo "== 3. INVALID PROJECT ID =="
+          HTTP_CODE=$(curl --max-time 30 --silent --output invalid-project.json --write-out "%{http_code}" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API/projects/not-a-real-project-id")
+
+          test "$HTTP_CODE" = "404" || {
+            echo "Expected 404 for invalid project ID, got $HTTP_CODE"
+            cat invalid-project.json
+            exit 1
+          }
+
+          echo "INVALID PROJECT ID REJECTED OK"
+
+          echo "== 4. BUILDER REVIEW PATH TRAVERSAL =="
+          cat > traversal.json <<'JSON'
+          {
+            "files": [
+              {
+                "path": "../secret.txt",
+                "content": "should not be accepted"
+              },
+              {
+                "path": "index.html",
+                "content": "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body>test</body></html>"
+              }
+            ]
+          }
+          JSON
+
+          HTTP_CODE=$(curl --max-time 30 --silent --show-error --output traversal-response.json --write-out "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d @traversal.json \
+            "$API/builder/review")
+
+          test "$HTTP_CODE" = "200" || {
+            echo "Expected review endpoint to sanitize invalid path and continue, got $HTTP_CODE"
+            cat traversal-response.json
+            exit 1
+          }
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("traversal-response.json"))
+          assert d["success"] is True
+          assert d["review"]["passed"] is True
+          print("PATH TRAVERSAL SANITIZATION OK")
+          PY
+
+          echo "== 5. BUILDER REVIEW ABSOLUTE PATH =="
+          cat > absolute-path.json <<'JSON'
+          {
+            "files": [
+              {
+                "path": "/etc/passwd",
+                "content": "should not be accepted"
+              },
+              {
+                "path": "index.html",
+                "content": "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body>test</body></html>"
+              }
+            ]
+          }
+          JSON
+
+          raw_request -X POST \
+            -H "Content-Type: application/json" \
+            -d @absolute-path.json \
+            "$API/builder/review" > absolute-response.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("absolute-response.json"))
+          assert d["success"] is True
+          assert d["review"]["files_checked"] == 1
+          print("ABSOLUTE PATH SANITIZATION OK")
+          PY
+
+          echo "== 6. SECRET DETECTION =="
+          cat > secret.json <<'JSON'
+          {
+            "files": [
+              {
+                "path": "index.html",
+                "content": "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body>test</body></html>"
+              },
+              {
+                "path": "app.js",
+                "content": "const key = 'OPENAI_API_KEY';"
+              }
+            ]
+          }
+          JSON
+
+          HTTP_CODE=$(raw_request -X POST \
+            -H "Content-Type: application/json" \
+            -d @secret.json \
+            "$API/builder/review" \
+            -o secret-response.json \
+            -w "%{http_code}")
+
+          test "$HTTP_CODE" = "200" || {
+            echo "Expected review response 200 for detected secret, got $HTTP_CODE"
+            cat secret-response.json
+            exit 1
+          }
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("secret-response.json"))
+          assert d["success"] is False
+          assert d["review"]["passed"] is False
+          assert any("secret" in x.lower() or "api key" in x.lower() for x in d["review"]["issues"])
+          print("SECRET DETECTION OK")
+          PY
+
+          echo "== 7. INVALID EMPTY FILE LIST =="
+          printf '{"files":[]}' > empty-files.json
+
+          HTTP_CODE=$(raw_request -X POST \
+            -H "Content-Type: application/json" \
+            -d @empty-files.json \
+            "$API/builder/review" \
+            -o empty-response.json \
+            -w "%{http_code}")
+
+          test "$HTTP_CODE" = "400" || {
+            echo "Expected 400 for empty files, got $HTTP_CODE"
+            cat empty-response.json
+            exit 1
+          }
+
+          echo "EMPTY FILE LIST REJECTED OK"
+
+          echo "== 8. OVERSIZED FILE REJECTION =="
+          python3 - <<'PY'
+          import json
+          payload={"files":[{"path":"large.txt","content":"x"*200001}]}
+          json.dump(payload,open("large-file.json","w"))
+          PY
+
+          HTTP_CODE=$(raw_request -X POST \
+            -H "Content-Type: application/json" \
+            -d @large-file.json \
+            "$API/builder/review" \
+            -o large-response.json \
+            -w "%{http_code}")
+
+          test "$HTTP_CODE" = "400" || {
+            echo "Expected 400 for oversized/invalid-only files, got $HTTP_CODE"
+            cat large-response.json
+            exit 1
+          }
+
+          echo "OVERSIZED FILE REJECTED OK"
+
+          echo "== 9. BUILDER INVALID PROJECT ID =="
+          cat > invalid-builder-project.json <<'JSON'
+          {
+            "prompt": "Update this invalid project",
+            "projectId": "not-a-real-project-id",
+            "plan": {
+              "project_type": "business",
+              "goal": "Test invalid project handling",
+              "pages": ["Home"],
+              "features": [],
+              "data_models": [],
+              "files": ["index.html"]
+            }
+          }
+          JSON
+
+          HTTP_CODE=$(raw_request -X POST \
+            -H "Content-Type: application/json" \
+            -d @invalid-builder-project.json \
+            "$API/builder" \
+            -o invalid-builder-response.json \
+            -w "%{http_code}")
+
+          test "$HTTP_CODE" = "404" || {
+            echo "Expected 404 for invalid builder project ID, got $HTTP_CODE"
+            cat invalid-builder-response.json
+            exit 1
+          }
+
+          echo "BUILDER INVALID PROJECT REJECTED OK"
+
+          echo "BUILDER SECURITY VALIDATION PASSED"
