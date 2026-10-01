@@ -131,7 +131,7 @@ function demoBuilderPlan(prompt) {
   };
 }
 
-async function generateBuilderPlan({ prompt }) {
+export async function generateBuilderPlan({ prompt }) {
   if (useDemoProvider()) return demoBuilderPlan(prompt);
 
   const instructions = `You are the 4N DEV AI Builder Planner.
