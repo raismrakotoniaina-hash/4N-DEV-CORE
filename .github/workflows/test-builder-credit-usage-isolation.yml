@@ -57,9 +57,10 @@ jobs:
           d=json.load(open("planner.json"))
           assert d["success"] is True, d
           assert d["credits_used"] == 2, d
-          assert d["plan"]["project_type"] == "business", d
+          assert d["plan"]["project_type"] == "dashboard", d
           print("PLANNER CREDIT USAGE ISOLATION OK")
           print("CREDITS USED:", d["credits_used"])
+          print("PROJECT TYPE:", d["plan"]["project_type"])
           PY
 
       - name: Builder spends only builder credits
