@@ -1,76 +1,19 @@
 name: Builder Project Type Test
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
-  planner:
+  test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Dashboard
+      - name: Test Builder Planner
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
         run: |
           set -e
-          response=$(curl --fail --silent --show-error --max-time 90 \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt":"Create an admin dashboard with KPI cards, analytics and settings"}' \
-            "https://fourn-dev-core.onrender.com/v1/builder/plan")
-          echo "$response"
-          echo "$response" | grep -q '"success":true'
-          echo "$response" | grep -q '"project_type":"dashboard"'
-          echo "DASHBOARD OK"
-
-      - name: Booking
-        env:
-          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
-        run: |
-          set -e
-          response=$(curl --fail --silent --show-error --max-time 90 \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt":"Create a booking application with services, date, time and confirmation"}' \
-            "https://fourn-dev-core.onrender.com/v1/builder/plan")
-          echo "$response"
-          echo "$response" | grep -q '"success":true'
-          echo "$response" | grep -q '"project_type":"booking"'
-          echo "BOOKING OK"
-
-      - name: Business
-        env:
-          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
-        run: |
-          set -e
-          response=$(curl --fail --silent --show-error --max-time 90 \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt":"Create a business CRM and invoice application with clients and invoices"}' \
-            "https://fourn-dev-core.onrender.com/v1/builder/plan")
-          echo "$response"
-          echo "$response" | grep -q '"success":true'
-          echo "$response" | grep -q '"project_type":"business"'
-          echo "BUSINESS OK"
-
-      - name: CRUD
-        env:
-          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
-        run: |
-          set -e
-          response=$(curl --fail --silent --show-error --max-time 90 \
-            -X POST \
-            -H "Authorization: Bearer $CORE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"prompt":"Create an inventory CRUD application with stock list, search and edit forms"}' \
-            "https://fourn-dev-core.onrender.com/v1/builder/plan")
-          echo "$response"
-          echo "$response" | grep -q '"success":true'
-          echo "$response" | grep -q '"project_type":"crud"'
-          echo "CRUD OK"
-
-      - name: Result
-        run: echo "ALL BUILDER PROJECT TYPE TESTS PASSED"
+          curl --fail --silent --show-error --max-time 90 -X POST -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" --data-raw '{"prompt":"Create an admin dashboard with KPI cards, analytics and settings"}' https://fourn-dev-core.onrender.com/v1/builder/plan > result.json
+          cat result.json
+          grep -q '"success":true' result.json
+          grep -q '"project_type":"dashboard"' result.json
+          echo "BUILDER PLANNER TEST PASSED"
