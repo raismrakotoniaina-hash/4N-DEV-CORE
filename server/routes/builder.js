@@ -1,7 +1,7 @@
 import express from "express";
 import { requireApiKey } from "../middleware/apiKey.js";
 import { requirePlanFeature } from "../middleware/planFeature.js";
-import { generateBuilderResponse, generateBuilderPlan } from "../aiGateway.js";
+import { generateBuilderResponse, generateBuilderPlan, repairBuilderFiles } from "../aiGateway.js";
 import { getProject, createProject } from "../projects.js";
 import { upsertFile } from "../files.js";
 import { recordUsage } from "../usage.js";
