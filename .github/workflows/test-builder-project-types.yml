@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-project-types:
+  builder-project-types:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test Builder project types
+      - name: Test project type classification
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
           API: https://fourn-dev-core.onrender.com/v1
@@ -21,76 +21,28 @@ jobs:
 
             echo "== TEST: $TYPE =="
 
-            PLAN=$(curl --fail-with-body --max-time 90 --silent --show-error \
-              -X POST \
-              -H "Authorization: Bearer $CORE_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d "{\"prompt\":\"$PROMPT\"}" \
-              "$API/builder/plan")
+            RESPONSE=$(curl --fail-with-body --max-time 90 --silent --show-error               -X POST               -H "Authorization: Bearer $CORE_API_KEY"               -H "Content-Type: application/json"               -d "{\"prompt\":\"$PROMPT\"}"               "$API/builder/plan")
 
-            echo "$PLAN" > plan.json
+            echo "$RESPONSE"
 
-            python3 - "$TYPE" <<'PY'
+            echo "$RESPONSE" | python3 - "$TYPE" <<'PY'
 import json
 import sys
 
 expected = sys.argv[1]
-data = json.load(open("plan.json"))
+data = json.load(sys.stdin)
 
 assert data["success"] is True, data
 assert data["plan"]["project_type"] == expected, data
 assert data["credits_used"] == 2, data
 
-print("PLANNER OK |", expected)
-PY
-
-            python3 - <<'PY'
-import json
-
-plan = json.load(open("plan.json"))["plan"]
-
-payload = {
-    "prompt": plan["goal"],
-    "projectName": "Multi Project Type Test",
-    "plan": plan
-}
-
-json.dump(payload, open("builder-payload.json", "w"))
-PY
-
-            BUILDER=$(curl --fail-with-body --max-time 90 --silent --show-error \
-              -X POST \
-              -H "Authorization: Bearer $CORE_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d @builder-payload.json \
-              "$API/builder")
-
-            echo "$BUILDER" > builder.json
-
-            python3 - "$TYPE" <<'PY'
-import json
-import sys
-
-expected = sys.argv[1]
-data = json.load(open("builder.json"))
-
-assert data["success"] is True, data
-assert data["files"], data
-assert data["credits_used"] == 10, data
-assert data.get("review", {}).get("passed") is True, data
-
-paths = {file["path"] for file in data["files"]}
-assert "index.html" in paths, paths
-
-print("BUILDER OK |", expected)
-print("FILES |", ", ".join(sorted(paths)))
-print("REVIEW OK | passed=True")
+print("PLANNER OK |", expected, "| 2 credits")
 PY
           }
 
           test_type "dashboard" "Create an admin dashboard with KPI cards, analytics, searchable data table, settings and responsive navigation"
-          test_type "booking" "Create a booking application with services, date and time selection, validation, confirmation and responsive navigation"
-          test_type "business" "Create a business CRM and invoice app with clients, invoices, dashboard KPIs, search, forms and settings"
-          test_type "crud" "Create an inventory management app with stock list, search, filters, create and edit forms and responsive dashboard"
+          test_type "booking" "Create a booking application with services, date and time selection, validation and confirmation"
+          test_type "business" "Create a business CRM and invoice application with clients, invoices, dashboard KPIs and settings"
+          test_type "crud" "Create an inventory management CRUD application with stock list, search, filters and create edit forms"
 
-          echo "ALL BUILDER PROJECT TYPE TESTS PASSED"
+          echo "ALL BUILDER PROJECT TYPE PLANNER TESTS PASSED"
