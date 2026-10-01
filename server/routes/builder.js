@@ -227,13 +227,55 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
-    const review = reviewGeneratedFiles(files);
+    let finalFiles = files;
+    let review = reviewGeneratedFiles(finalFiles);
+    let repair = { attempted: false, passed: review.passed };
+
     if (!review.passed) {
-      return res.status(502).json({
-        success: false,
-        error: "Builder output failed quality review",
+      repair.attempted = true;
+      const repaired = await repairBuilderFiles({
+        prompt,
+        plan: plan && typeof plan === "object" ? plan : null,
+        files: finalFiles,
         review
       });
+
+      finalFiles = cleanFiles(repaired.files);
+      if (!finalFiles.length || finalFiles.length > BUILDER_LIMITS.maxFiles) {
+        return res.status(502).json({
+          success: false,
+          error: "Builder auto-fix returned invalid files",
+          review,
+          repair: { ...repair, passed: false, model: repaired.model }
+        });
+      }
+
+      const repairedTotalCharacters = finalFiles.reduce((sum, file) => sum + file.content.length, 0);
+      if (repairedTotalCharacters > BUILDER_LIMITS.maxTotalCharacters) {
+        return res.status(502).json({
+          success: false,
+          error: "Builder auto-fix output is too large",
+          review,
+          repair: { ...repair, passed: false, model: repaired.model }
+        });
+      }
+
+      review = reviewGeneratedFiles(finalFiles);
+      repair = {
+        attempted: true,
+        passed: review.passed,
+        model: repaired.model,
+        summary: repaired.summary || ""
+      };
+
+      if (!review.passed) {
+        return res.status(502).json({
+          success: false,
+          error: "Builder output failed quality review after auto-fix",
+          review,
+          repair
+        });
+      }
     }
 
     if (!project) {
@@ -260,7 +302,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
 
     let savedFiles;
     try {
-      savedFiles = files.map(file =>
+      savedFiles = finalFiles.map(file =>
         upsertFile(req.apiKey.id, project.id, file.path, file.content)
       );
     } catch (error) {
@@ -289,6 +331,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       summary: result.summary || (plan && typeof plan.project_type === "string" ? `Planner-driven ${plan.project_type} project generated.` : ""),
       planner_project_type: plan?.project_type || null,
       review,
+      repair,
       model: result.model,
       usage: result.usage,
       credits_used: BUILDER_COST,
