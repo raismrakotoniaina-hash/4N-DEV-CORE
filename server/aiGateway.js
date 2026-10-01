@@ -287,6 +287,81 @@ export async function generateEmbedding(input) {
   };
 }
 
+
+function demoBuilderRepair({ files, review }) {
+  const repaired = files.map(file => {
+    if (/\.html$/i.test(file.path)) {
+      let content = file.content;
+      if (!/<html[\\s>]/i.test(content)) {
+        content = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${content}</body></html>`;
+      } else if (!/<meta[^>]+viewport/i.test(content)) {
+        content = content.replace(/<head([^>]*)>/i, '<head$1><meta name="viewport" content="width=device-width,initial-scale=1">');
+      }
+      return { ...file, content };
+    }
+    return file;
+  });
+  return {
+    model: "4n-dev-demo-builder-repair",
+    files: repaired,
+    summary: `Demo repair attempted for ${review.issues.length} issue(s).`,
+    usage: { provider: "demo", repair: true }
+  };
+}
+
+export async function repairBuilderFiles({ prompt, plan = null, files, review }) {
+  if (useDemoProvider()) return demoBuilderRepair({ files, review });
+
+  const repairInput = {
+    prompt,
+    plan,
+    review,
+    files
+  };
+
+  const instructions = `You are the 4N DEV AI Builder Repair engine.
+Repair ONLY the issues identified by the quality review.
+Preserve existing functionality, design, file paths, and working code.
+Return ONLY valid JSON:
+{
+  "summary": "short repair summary",
+  "files": [
+    { "path": "relative/path.ext", "content": "complete file content" }
+  ]
+}
+Rules:
+- Return the complete repaired file set, not patches.
+- Keep all paths relative and safe.
+- Never add secrets, API keys, credentials, or private environment values.
+- Fix the listed review issues and do not unnecessarily rewrite unrelated files.
+- The repaired output must be runnable.
+- Do not use markdown fences or text outside JSON.
+Repair request:
+${JSON.stringify(repairInput)}`;
+
+  const data = await openAIRequest(OPENAI_RESPONSES_URL, {
+    model: DEFAULT_MODEL,
+    input: [{ role: "user", content: [{ type: "input_text", text: instructions }] }],
+    max_output_tokens: 16000
+  });
+
+  let parsed;
+  try {
+    parsed = JSON.parse(data.output_text || "{}");
+  } catch {
+    const error = new Error("Builder repair returned invalid JSON");
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return {
+    model: data.model,
+    files: parsed.files || [],
+    summary: parsed.summary || "Builder repair completed.",
+    usage: data.usage || null
+  };
+}
+
 export async function generateBuilderResponse({ prompt, project = null, plan = null }) {
   if (useDemoProvider()) return demoBuilderResponse({ prompt, project, plan });
 
