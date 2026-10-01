@@ -152,7 +152,34 @@ jobs:
 
           echo "PAPI WEBHOOK SIGNATURE VERIFIED"
 
-          echo "== 8. VERIFY CREDITS =="
+          echo "== 8. TEST WEBHOOK IDEMPOTENCY =="
+
+          DUPLICATE_FILE=$(mktemp)
+
+          DUPLICATE_STATUS=$(curl -sS -o "$DUPLICATE_FILE" -w "%{http_code}" -X POST \\
+            "$API_URL/v1/billing/webhooks/papi" \\
+            -H "Content-Type: application/json" \\
+            -H "X-Papi-Signature: t=$TIMESTAMP,v1=$SIGNATURE" \\
+            --data-binary "$PAYLOAD")
+
+          cat "$DUPLICATE_FILE" | jq .
+          echo "DUPLICATE_STATUS=$DUPLICATE_STATUS"
+
+          if [ "$DUPLICATE_STATUS" != "200" ]; then
+            echo "ERROR: Duplicate webhook was not accepted idempotently"
+            exit 1
+          fi
+
+          DUPLICATE_FULFILLED=$(jq -r '.already_fulfilled' "$DUPLICATE_FILE")
+
+          if [ "$DUPLICATE_FULFILLED" != "true" ]; then
+            echo "ERROR: Duplicate webhook did not return already_fulfilled=true"
+            exit 1
+          fi
+
+          echo "WEBHOOK IDEMPOTENCY OK"
+
+          echo "== 9. VERIFY CREDITS =="
 
           AFTER=$(curl -sS \
             -H "Authorization: Bearer $CORE_API_KEY" \
