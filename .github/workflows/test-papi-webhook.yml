@@ -24,7 +24,6 @@ jobs:
             -d '{"planId":"starter","currency":"MGA"}')
 
           echo "$ORDER" | jq .
-
           ORDER_ID=$(echo "$ORDER" | jq -r '.order.id')
 
           if [ -z "$ORDER_ID" ] || [ "$ORDER_ID" = "null" ]; then
@@ -43,7 +42,6 @@ jobs:
             -d '{"provider":"papi"}')
 
           echo "$CHECKOUT" | jq .
-
           PAYMENT_ID=$(echo "$CHECKOUT" | jq -r '.payment.id')
           NOTIFICATION_TOKEN=$(echo "$CHECKOUT" | jq -r '.payment.notificationToken')
 
@@ -67,7 +65,6 @@ jobs:
             "$API_URL/v1/credits")
 
           echo "$BEFORE" | jq .
-
           BEFORE_CREDITS=$(echo "$BEFORE" | jq -r '.credits // .balance // 0')
           echo "BEFORE_CREDITS=$BEFORE_CREDITS"
 
@@ -135,7 +132,6 @@ jobs:
             --data-binary "$PAYLOAD")
 
           cat "$RESPONSE_FILE" | jq .
-
           echo "HTTP_STATUS=$HTTP_STATUS"
 
           if [ "$HTTP_STATUS" != "200" ]; then
@@ -156,10 +152,10 @@ jobs:
 
           DUPLICATE_FILE=$(mktemp)
 
-          DUPLICATE_STATUS=$(curl -sS -o "$DUPLICATE_FILE" -w "%{http_code}" -X POST \\
-            "$API_URL/v1/billing/webhooks/papi" \\
-            -H "Content-Type: application/json" \\
-            -H "X-Papi-Signature: t=$TIMESTAMP,v1=$SIGNATURE" \\
+          DUPLICATE_STATUS=$(curl -sS -o "$DUPLICATE_FILE" -w "%{http_code}" -X POST \
+            "$API_URL/v1/billing/webhooks/papi" \
+            -H "Content-Type: application/json" \
+            -H "X-Papi-Signature: t=$TIMESTAMP,v1=$SIGNATURE" \
             --data-binary "$PAYLOAD")
 
           cat "$DUPLICATE_FILE" | jq .
@@ -186,7 +182,6 @@ jobs:
             "$API_URL/v1/credits")
 
           echo "$AFTER" | jq .
-
           AFTER_CREDITS=$(echo "$AFTER" | jq -r '.credits // .balance // 0')
           echo "AFTER_CREDITS=$AFTER_CREDITS"
 
