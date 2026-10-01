@@ -383,26 +383,61 @@ ${JSON.stringify(repairInput)}`;
 export async function generateBuilderResponse({ prompt, project = null, plan = null }) {
   if (useDemoProvider()) return demoBuilderResponse({ prompt, project, plan });
 
+  const plannerSpec = plan
+    ? JSON.stringify({
+        project_type: plan.project_type,
+        goal: plan.goal,
+        stack: plan.stack,
+        pages: plan.pages,
+        features: plan.features,
+        data_models: plan.data_models,
+        files: plan.files
+      })
+    : "none";
+
   const instructions = `You are the 4N DEV AI Builder engine.
-Generate a small, runnable web project from the user's request.
-Return ONLY valid JSON with this exact shape:
+Generate a coherent, runnable application from the user's request and the Planner specification.
+
+Return ONLY valid JSON:
 {
   "name": "Project name",
   "description": "Short description",
   "summary": "What was generated",
   "files": [
-    { "path": "index.html", "content": "..." }
+    { "path": "relative/path.ext", "content": "complete file content" }
   ]
 }
-Rules:
-- Generate complete file contents, not placeholders.
-- Use relative paths only.
-- Prefer a simple static HTML/CSS/JS project unless the user explicitly asks for another stack.
-- Keep the project focused and runnable.
-- Do not include markdown fences or any text outside the JSON.
+
+Core rules:
+- The Planner specification is authoritative for project type, pages, features, data models and expected files.
+- Generate complete working file contents. Never use TODO, placeholder, lorem ipsum, coming soon, or fake empty sections.
+- Keep every path relative and safe.
+- Prefer HTML/CSS/JavaScript when the Planner does not require another practical stack.
+- Build a responsive mobile-first interface with accessible navigation.
+- Include realistic sample data where useful.
+- Implement real client-side interactions, validation, loading/error/empty states where applicable.
+- Use localStorage for persistence when no backend/database is requested.
+- Do not expose secrets, API keys, credentials, private environment values, or server-only configuration in generated files.
+
+Project-specific requirements:
+- ecommerce: product listing/detail, cart persistence, quantity controls, totals and checkout UI.
+- dashboard/business/CRM/POS/CRUD: navigation, KPI cards, tables, search/filter, create/edit forms and useful local state.
+- booking: service selection, date/time selection, validation and booking confirmation.
+- chat: conversation list, message composer and persistent local conversation state.
+- education: course listing/detail, progress and profile views.
+- mobile/PWA: mobile-first navigation, installable-friendly structure and responsive layouts.
+- auth: login/register/logout UI and validation; never hard-code real credentials.
+
+Make the result internally consistent: links, script paths, stylesheets, IDs and JavaScript selectors must match the generated files.
+Generate all files requested by the Planner when practical, not only an entry point.
+
 User request:
 ${prompt}
-Existing project:
+
+Planner specification:
+${plannerSpec}
+
+Existing project context:
 ${project ? JSON.stringify(project) : "none"}`;
 
   const data = await openAIRequest(OPENAI_RESPONSES_URL, {
