@@ -31,3 +31,17 @@ jobs:
           grep -q '"success":true' result.json
           grep -q '"project_type":"booking"' result.json
           echo "BOOKING PLANNER TEST PASSED"
+
+  test-business:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Business Planner
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          curl --fail --silent --show-error --max-time 90 -X POST -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" --data-raw '{"prompt":"Create a business website for a company with services, about page, contact form and company information"}' https://fourn-dev-core.onrender.com/v1/builder/plan > result.json
+          cat result.json
+          grep -q '"success":true' result.json
+          grep -q '"project_type":"business"' result.json
+          echo "BUSINESS PLANNER TEST PASSED"
