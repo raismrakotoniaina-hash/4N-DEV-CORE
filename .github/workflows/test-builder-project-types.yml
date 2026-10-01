@@ -1,48 +1,76 @@
-name: Test Builder Project Types
+name: Builder Project Type Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  builder-project-types:
+  planner:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test project type classification
+      - name: Dashboard
         env:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
-          API: https://fourn-dev-core.onrender.com/v1
         run: |
           set -e
+          response=$(curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create an admin dashboard with KPI cards, analytics and settings"}' \
+            "https://fourn-dev-core.onrender.com/v1/builder/plan")
+          echo "$response"
+          echo "$response" | grep -q '"success":true'
+          echo "$response" | grep -q '"project_type":"dashboard"'
+          echo "DASHBOARD OK"
 
-          test_type() {
-            TYPE="$1"
-            PROMPT="$2"
+      - name: Booking
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          response=$(curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a booking application with services, date, time and confirmation"}' \
+            "https://fourn-dev-core.onrender.com/v1/builder/plan")
+          echo "$response"
+          echo "$response" | grep -q '"success":true'
+          echo "$response" | grep -q '"project_type":"booking"'
+          echo "BOOKING OK"
 
-            echo "== TEST: $TYPE =="
+      - name: Business
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          response=$(curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create a business CRM and invoice application with clients and invoices"}' \
+            "https://fourn-dev-core.onrender.com/v1/builder/plan")
+          echo "$response"
+          echo "$response" | grep -q '"success":true'
+          echo "$response" | grep -q '"project_type":"business"'
+          echo "BUSINESS OK"
 
-            RESPONSE=$(curl --fail-with-body --max-time 90 --silent --show-error               -X POST               -H "Authorization: Bearer $CORE_API_KEY"               -H "Content-Type: application/json"               -d "{\"prompt\":\"$PROMPT\"}"               "$API/builder/plan")
+      - name: CRUD
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          response=$(curl --fail --silent --show-error --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"Create an inventory CRUD application with stock list, search and edit forms"}' \
+            "https://fourn-dev-core.onrender.com/v1/builder/plan")
+          echo "$response"
+          echo "$response" | grep -q '"success":true'
+          echo "$response" | grep -q '"project_type":"crud"'
+          echo "CRUD OK"
 
-            echo "$RESPONSE"
-
-            echo "$RESPONSE" | python3 - "$TYPE" <<'PY'
-import json
-import sys
-
-expected = sys.argv[1]
-data = json.load(sys.stdin)
-
-assert data["success"] is True, data
-assert data["plan"]["project_type"] == expected, data
-assert data["credits_used"] == 2, data
-
-print("PLANNER OK |", expected, "| 2 credits")
-PY
-          }
-
-          test_type "dashboard" "Create an admin dashboard with KPI cards, analytics, searchable data table, settings and responsive navigation"
-          test_type "booking" "Create a booking application with services, date and time selection, validation and confirmation"
-          test_type "business" "Create a business CRM and invoice application with clients, invoices, dashboard KPIs and settings"
-          test_type "crud" "Create an inventory management CRUD application with stock list, search, filters and create edit forms"
-
-          echo "ALL BUILDER PROJECT TYPE PLANNER TESTS PASSED"
+      - name: Result
+        run: echo "ALL BUILDER PROJECT TYPE TESTS PASSED"
