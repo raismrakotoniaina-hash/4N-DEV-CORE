@@ -1,0 +1,165 @@
+name: Test Projects Files CRUD
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test-projects-files-crud:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Projects and Files CRUD
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          request() {
+            curl --fail-with-body --max-time 60 --silent --show-error \
+              -H "Authorization: Bearer $CORE_API_KEY" \
+              "$@"
+          }
+
+          echo "== 1. CREATE PROJECT =="
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"name":"CRUD Integration Test","description":"Projects and files CRUD test"}' \
+            "$API/projects" > project-create.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("project-create.json"))
+          assert d["success"] is True
+          assert d["project"]["name"] == "CRUD Integration Test"
+          assert d["project"]["description"] == "Projects and files CRUD test"
+          print("CREATE PROJECT OK")
+          PY
+
+          PROJECT_ID=$(python3 -c 'import json; print(json.load(open("project-create.json"))["project"]["id"])')
+
+          echo "== 2. READ PROJECT =="
+          request "$API/projects/$PROJECT_ID" > project-read.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("project-read.json"))
+          assert d["success"] is True
+          assert d["project"]["id"]
+          assert d["project"]["name"] == "CRUD Integration Test"
+          print("READ PROJECT OK")
+          PY
+
+          echo "== 3. UPDATE PROJECT =="
+          request -X PATCH \
+            -H "Content-Type: application/json" \
+            -d '{"name":"CRUD Integration Test Updated","description":"Updated project description"}' \
+            "$API/projects/$PROJECT_ID" > project-update.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("project-update.json"))
+          assert d["success"] is True
+          assert d["project"]["name"] == "CRUD Integration Test Updated"
+          assert d["project"]["description"] == "Updated project description"
+          print("UPDATE PROJECT OK")
+          PY
+
+          echo "== 4. CREATE FILE =="
+          request -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"path":"index.html","content":"<!doctype html><html><body><h1>CRUD Test</h1></body></html>"}' \
+            "$API/projects/$PROJECT_ID/files" > file-create.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("file-create.json"))
+          assert d["success"] is True
+          assert d["file"]["path"] == "index.html"
+          assert d["file"]["content"].startswith("<!doctype html>")
+          print("CREATE FILE OK")
+          PY
+
+          FILE_ID=$(python3 -c 'import json; print(json.load(open("file-create.json"))["file"]["id"])')
+
+          echo "== 5. READ FILE =="
+          request "$API/projects/$PROJECT_ID/files/$FILE_ID" > file-read.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("file-read.json"))
+          assert d["success"] is True
+          assert d["file"]["id"]
+          assert d["file"]["path"] == "index.html"
+          assert "CRUD Test" in d["file"]["content"]
+          print("READ FILE OK")
+          PY
+
+          echo "== 6. LIST FILES =="
+          request "$API/projects/$PROJECT_ID/files" > files-list.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("files-list.json"))
+          assert d["success"] is True
+          assert any(f["path"] == "index.html" for f in d["files"])
+          print("LIST FILES OK")
+          PY
+
+          echo "== 7. UPDATE FILE =="
+          request -X PUT \
+            -H "Content-Type: application/json" \
+            -d '{"path":"index.html","content":"<!doctype html><html><body><h1>CRUD Test Updated</h1></body></html>"}' \
+            "$API/projects/$PROJECT_ID/files/$FILE_ID" > file-update.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("file-update.json"))
+          assert d["success"] is True
+          assert d["file"]["path"] == "index.html"
+          assert "CRUD Test Updated" in d["file"]["content"]
+          assert d["file"]["id"]
+          print("UPDATE FILE OK")
+          PY
+
+          echo "== 8. DELETE FILE =="
+          request -X DELETE "$API/projects/$PROJECT_ID/files/$FILE_ID" > file-delete.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("file-delete.json"))
+          assert d["success"] is True
+          assert d["deleted"] is True
+          print("DELETE FILE OK")
+          PY
+
+          echo "== 9. VERIFY FILE DELETED =="
+          if curl --fail --max-time 30 --silent --show-error \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API/projects/$PROJECT_ID/files/$FILE_ID" > deleted-file.json; then
+            echo "Expected 404 after file deletion, but request succeeded"
+            exit 1
+          fi
+          echo "VERIFY FILE DELETED OK"
+
+          echo "== 10. DELETE PROJECT =="
+          request -X DELETE "$API/projects/$PROJECT_ID" > project-delete.json
+
+          python3 - <<'PY'
+          import json
+          d=json.load(open("project-delete.json"))
+          assert d["success"] is True
+          assert d["deleted"] is True
+          print("DELETE PROJECT OK")
+          PY
+
+          echo "== 11. VERIFY PROJECT DELETED =="
+          if curl --fail --max-time 30 --silent --show-error \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$API/projects/$PROJECT_ID" > deleted-project.json; then
+            echo "Expected 404 after project deletion, but request succeeded"
+            exit 1
+          fi
+          echo "VERIFY PROJECT DELETED OK"
+
+          echo "PROJECTS -> FILES CRUD PASSED"
