@@ -1,7 +1,7 @@
 name: Test Builder Credit Usage Isolation
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   credit-usage-isolation:
@@ -9,110 +9,113 @@ jobs:
     steps:
       - name: Setup
         env:
-          API_BASE: ${{ secrets.CORE_API_URL }}
-          API_KEY: ${{ secrets.CORE_API_KEY }}
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+          API: https://fourn-dev-core.onrender.com/v1
         run: |
           set -euo pipefail
-          test -n "$API_BASE"
-          test -n "$API_KEY"
-          echo "API_BASE=$API_BASE" >> "$GITHUB_ENV"
-          echo "API_KEY=$API_KEY" >> "$GITHUB_ENV"
+          test -n "$CORE_API_KEY"
+          echo "CORE_API_KEY=$CORE_API_KEY" >> "$GITHUB_ENV"
+          echo "API=$API" >> "$GITHUB_ENV"
 
       - name: Read credit policy
         run: |
           set -euo pipefail
-          curl -fsS -H "x-api-key: $API_KEY" "$API_BASE/credits/policy" -o policy.json
+          curl --fail-with-body --max-time 60 --silent --show-error             -H "Authorization: Bearer $CORE_API_KEY"             "$API/credit-policy" > policy.json
           cat policy.json
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           d=json.load(open("policy.json"))
+          assert d["success"] is True
+          assert d["policy"]["planner"]["credits"] == 2
+          assert d["policy"]["builder"]["credits"] == 10
           print("CREDIT POLICY READ OK")
+          print("PLANNER COST:", d["policy"]["planner"]["credits"])
+          print("BUILDER COST:", d["policy"]["builder"]["credits"])
           PY
 
-      - name: Planner request and usage isolation
+      - name: Read starting balance
         run: |
           set -euo pipefail
-          BEFORE=$(curl -fsS -H "x-api-key: $API_KEY" "$API_BASE/credits")
-          echo "$BEFORE" > before-planner.json
-          curl -fsS -X POST "$API_BASE/builder/plan"             -H "Content-Type: application/json"             -H "x-api-key: $API_KEY"             -d '{"prompt":"Create a small business dashboard with clients, invoices and settings"}'             -o planner.json
+          curl --fail-with-body --max-time 60 --silent --show-error             -H "Authorization: Bearer $CORE_API_KEY"             "$API/credits" > before.json
+          cat before.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("before.json"))
+          assert d["success"] is True
+          assert isinstance(d["credits"], (int,float))
+          assert d["credits"] >= 12, f"Need at least 12 credits, have {d['credits']}"
+          print("STARTING CREDIT BALANCE OK:", d["credits"])
+          PY
+
+      - name: Planner spends only planner credits
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --max-time 90 --silent --show-error             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"prompt":"Create a small business dashboard with clients, invoices and settings"}'             "$API/builder/plan" > planner.json
           cat planner.json
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           d=json.load(open("planner.json"))
-          assert d.get("success") is True, d
-          assert isinstance(d.get("credits_used"), (int,float)), d
-          assert d["credits_used"] > 0, d
-          print("PLANNER CREDIT USAGE OK")
+          assert d["success"] is True, d
+          assert d["credits_used"] == 2, d
+          assert d["plan"]["project_type"] == "business", d
+          print("PLANNER CREDIT USAGE ISOLATION OK")
+          print("CREDITS USED:", d["credits_used"])
           PY
 
-      - name: Builder request and usage isolation
+      - name: Builder spends only builder credits
         run: |
           set -euo pipefail
-          curl -fsS -X POST "$API_BASE/builder"             -H "Content-Type: application/json"             -H "x-api-key: $API_KEY"             -d '{"prompt":"Build a simple business dashboard with clients, invoices and settings"}'             -o builder.json
+          curl --fail-with-body --max-time 120 --silent --show-error             -X POST             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"prompt":"Build a simple business dashboard with clients, invoices and settings"}'             "$API/builder" > builder.json
           cat builder.json
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           d=json.load(open("builder.json"))
-          assert d.get("success") is True, d
-          assert isinstance(d.get("credits_used"), (int,float)), d
-          assert d["credits_used"] > 0, d
-          assert isinstance(d.get("project",{}).get("id"), str), d
-          print("BUILDER CREDIT USAGE OK")
+          assert d["success"] is True, d
+          assert d["credits_used"] == 10, d
+          assert d["project"]["id"], d
+          assert d["review"]["passed"] is True, d
+          print("BUILDER CREDIT USAGE ISOLATION OK")
+          print("CREDITS USED:", d["credits_used"])
+          print("PROJECT ID:", d["project"]["id"])
           PY
 
-      - name: Verify credit balance changed
+      - name: Verify exact credit deduction
         run: |
           set -euo pipefail
-          AFTER=$(curl -fsS -H "x-api-key: $API_KEY" "$API_BASE/credits")
-          echo "$AFTER" > after.json
-          cat "$AFTER"
-          python - <<'PY'
+          curl --fail-with-body --max-time 60 --silent --show-error             -H "Authorization: Bearer $CORE_API_KEY"             "$API/credits" > after.json
+          cat after.json
+          python3 - <<'PY'
           import json
-          before=json.load(open("before-planner.json"))
+          before=json.load(open("before.json"))
           after=json.load(open("after.json"))
-          def balance(d):
-              for k in ("credits","balance","remaining","remaining_credits"):
-                  if isinstance(d.get(k),(int,float)):
-                      return d[k]
-              raise AssertionError(f"No numeric credit balance: {d}")
-          b=balance(before); a=balance(after)
-          assert a < b, (b,a)
-          print(f"CREDIT BALANCE DECREASED OK: {b} -> {a}")
+          expected=before["credits"]-12
+          assert after["credits"] == expected, (before["credits"], after["credits"], expected)
+          print(f"EXACT CREDIT DEDUCTION OK: {before['credits']} -> {after['credits']}")
+          print("PLANNER 2 + BUILDER 10 = 12 CREDITS")
           PY
 
-      - name: Insufficient credit request is blocked without charging
+      - name: Verify no unauthorized access
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          d=json.load(open("after.json"))
-          def balance(d):
-              for k in ("credits","balance","remaining","remaining_credits"):
-                  if isinstance(d.get(k),(int,float)):
-                      return d[k]
-              raise SystemExit(0)
-          b=balance(d)
-          if b > 0:
-              print("INSUFFICIENT-CREDIT CHECK SKIPPED: test account still has credits")
-          else:
-              print("INSUFFICIENT-CREDIT CHECK READY")
-          PY
-          BAL=$(python - <<'PY'
-          import json
-          d=json.load(open("after.json"))
-          for k in ("credits","balance","remaining","remaining_credits"):
-              if isinstance(d.get(k),(int,float)):
-                  print(d[k]); break
-          PY
-          )
-          if [ -z "$BAL" ] || [ "$BAL" -gt 0 ]; then
-            echo "INSUFFICIENT CREDIT TEST NOT RUN: account has remaining credits"
-            exit 0
+          CODE=$(curl --max-time 30 --silent --output unauthorized.json --write-out "%{http_code}"             "$API/credits")
+          test "$CODE" = "401" || {
+            echo "Expected 401 without API key, got $CODE"
+            cat unauthorized.json
+            exit 1
+          }
+          echo "UNAUTHORIZED CREDIT ACCESS BLOCK OK"
+
+      - name: Cleanup generated project
+        if: always()
+        run: |
+          set +e
+          if [ -f builder.json ]; then
+            PROJECT_ID=$(python3 -c 'import json; print(json.load(open("builder.json")).get("project",{}).get("id",""))' 2>/dev/null)
+            if [ -n "$PROJECT_ID" ]; then
+              curl --max-time 60 --silent --show-error                 -X DELETE                 -H "Authorization: Bearer $CORE_API_KEY"                 "$API/projects/$PROJECT_ID" || true
+              echo "CLEANUP PROJECT: $PROJECT_ID"
+            fi
           fi
-          CODE=$(curl -sS -o blocked.json -w "%{http_code}" -X POST "$API_BASE/builder"             -H "Content-Type: application/json"             -H "x-api-key: $API_KEY"             -d '{"prompt":"Build another dashboard"}')
-          cat blocked.json
-          test "$CODE" -ge 400
-          echo "INSUFFICIENT CREDIT BLOCK OK"
 
       - name: Final result
         run: echo "BUILDER CREDIT USAGE ISOLATION PASSED"
