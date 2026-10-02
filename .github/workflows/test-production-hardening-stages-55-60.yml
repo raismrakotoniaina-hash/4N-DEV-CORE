@@ -1,0 +1,91 @@
+name: Production Hardening Stages 55-60
+
+on:
+  workflow_dispatch:
+
+jobs:
+  certification:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Stage 55 - Production Health and API Contract
+        run: |
+          set -e
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"success":true'
+          echo "$health" | grep -q '"status":"online"'
+          root=$(curl -fsS "$BASE_URL/v1")
+          echo "$root" | grep -q '"name":"4N DEV API"'
+          echo "$root" | grep -q '"version":"v1"'
+          echo "STAGE 55 PASSED"
+
+      - name: Stage 56 - Authentication Boundary
+        run: |
+          set -e
+          code=$(curl -sS -o /tmp/no-auth.json -w "%{http_code}" "$BASE_URL/v1/me")
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/bad-auth.json -w "%{http_code}" "$BASE_URL/v1/me" -H "Authorization: Bearer invalid-production-key")
+          test "$code" = "401"
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+          echo "STAGE 56 PASSED"
+
+      - name: Stage 57 - Project CRUD Integrity
+        run: |
+          set -e
+          created=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"production-hardening-project","description":"stage 57"}')
+          project_id=$(echo "$created" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+          test -n "$project_id"
+          got=$(curl -fsS "$BASE_URL/v1/projects/$project_id" -H "Authorization: Bearer $API_KEY")
+          echo "$got" | grep -q '"success":true'
+          updated=$(curl -fsS -X PUT "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"production-hardening-updated"}')
+          echo "$updated" | grep -q '"success":true'
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          code=$(curl -sS -o /tmp/deleted-project.json -w "%{http_code}" "$BASE_URL/v1/projects/$project_id" -H "Authorization: Bearer $API_KEY")
+          test "$code" = "404"
+          echo "STAGE 57 PASSED"
+
+      - name: Stage 58 - File CRUD and Path Safety
+        run: |
+          set -e
+          created=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"production-file-check"}')
+          project_id=$(echo "$created" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+          code=$(curl -sS -o /tmp/traversal.json -w "%{http_code}" -X POST "$BASE_URL/v1/projects/$project_id/files"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"path":"../blocked.js","content":"blocked"}')
+          test "$code" = "400"
+          file=$(curl -fsS -X POST "$BASE_URL/v1/projects/$project_id/files"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"path":"src/production-check.js","content":"export const ok = true;"}')
+          file_id=$(echo "$file" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
+          test -n "$file_id"
+          got=$(curl -fsS "$BASE_URL/v1/projects/$project_id/files/$file_id" -H "Authorization: Bearer $API_KEY")
+          echo "$got" | grep -q '"success":true'
+          updated=$(curl -fsS -X PUT "$BASE_URL/v1/projects/$project_id/files/$file_id"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"content":"export const ok = true;"}')
+          echo "$updated" | grep -q '"success":true'
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id/files/$file_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          echo "STAGE 58 PASSED"
+
+      - name: Stage 59 - Credit Safety on Rejected Requests
+        run: |
+          set -e
+          before=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          before_credits=$(echo "$before" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          code=$(curl -sS -o /tmp/invalid-input.json -w "%{http_code}" -X POST "$BASE_URL/v1/chat"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"input":null}')
+          test "$code" = "400"
+          after=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          after_credits=$(echo "$after" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          test "$before_credits" = "$after_credits"
+          echo "STAGE 59 PASSED"
+
+      - name: Stage 60 - Final Production Hardening Certification
+        run: |
+          set -e
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"success":true'
+          echo "$health" | grep -q '"status":"online"'
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+          credits=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          echo "$credits" | grep -q '"credits"'
+          echo "PRODUCTION HARDENING STAGES 55-60 PASSED"
