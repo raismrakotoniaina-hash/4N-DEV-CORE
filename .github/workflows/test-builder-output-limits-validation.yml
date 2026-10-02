@@ -20,8 +20,8 @@ jobs:
           POLICY="$(curl -fsS "$API/credit-policy")"
           echo "$POLICY"
 
-          MAX_FILES="$(echo "$POLICY" | jq -r '.builder.maxFiles')"
-          MAX_TOTAL="$(echo "$POLICY" | jq -r '.builder.maxTotalCharacters')"
+          MAX_FILES="$(echo "$POLICY" | jq -r '.policy.builder.maxFiles')"
+          MAX_TOTAL="$(echo "$POLICY" | jq -r '.policy.builder.maxTotalCharacters')"
 
           test "$MAX_FILES" = "40"
           test "$MAX_TOTAL" = "4000000"
