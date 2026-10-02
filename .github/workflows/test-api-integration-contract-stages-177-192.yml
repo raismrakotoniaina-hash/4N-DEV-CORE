@@ -1,0 +1,112 @@
+name: API Integration Contract Stages 177-192
+
+on:
+  workflow_dispatch:
+
+jobs:
+  api-integration-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 177-180 API authentication and account contract
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          test "$(curl -sS "$BASE_URL/health" | python -c 'import sys,json; d=json.load(sys.stdin); assert d["success"] is True and d["status"]=="online"')
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          def get(path, token=None):
+              h=["-H",f"Authorization: Bearer {token}"] if token else []
+              return subprocess.check_output(["curl","-sS","-o","/tmp/r","-w","%{http_code}",*h,f"{base}{path}"],text=True)
+          assert get("/v1/me")== "401"
+          assert get("/v1/me","invalid-key")== "401"
+          code=get("/v1/me",key); assert code=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["active"] is True
+          assert "plan" in d and "features" in d and "scopes" in d and "credits" in d
+          code=get("/v1/credits",key); assert code=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and "credits" in d
+          print("177-180 PASS")
+          PY
+
+      - name: 181-184 Chat and Coding contract
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          H=["-H",f"Authorization: Bearer {key}","-H","Content-Type: application/json"]
+          def post(path, body):
+              return subprocess.check_output(["curl","-sS","-o","/tmp/r","-w","%{http_code}",*H,"-d",json.dumps(body),f"{base}{path}"],text=True)
+          code=post("/v1/chat",{"input":"integration contract test"}); assert code=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["credits_used"]==1 and d.get("output")
+          code=post("/v1/coding",{"input":"return 1"}); assert code=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["credits_used"]==5 and d.get("output")
+          print("181-184 PASS")
+          PY
+
+      - name: 185-188 Embeddings and Image contract
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          H=["-H",f"Authorization: Bearer {key}","-H","Content-Type: application/json"]
+          def post(path, body):
+              return subprocess.check_output(["curl","-sS","-o","/tmp/r","-w","%{http_code}",*H,"-d",json.dumps(body),f"{base}{path}"],text=True)
+          code=post("/v1/embeddings",{"input":"embedding contract test"}); assert code=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["credits_used"]==1 and isinstance(d["data"],list)
+          code=post("/v1/image",{"prompt":"simple test image","quality":"low"}); assert code=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["credits_used"]==10 and d.get("image")
+          print("185-188 PASS")
+          PY
+
+      - name: 189-192 Projects Files errors and security contract
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json, uuid
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          H=["-H",f"Authorization: Bearer {key}","-H","Content-Type: application/json"]
+          def req(method,path,body=None,auth=True):
+              args=["curl","-sS","-o","/tmp/r","-w","%{http_code}","-X",method]
+              if auth: args += ["-H",f"Authorization: Bearer {key}"]
+              if body is not None: args += ["-H","Content-Type: application/json","-d",json.dumps(body)]
+              return subprocess.check_output(args+[f"{base}{path}"],text=True)
+          assert req("GET","/v1/projects",auth=False)=="401"
+          assert req("POST","/v1/chat",{"input":123})=="400"
+          assert req("POST","/v1/projects",{"name":"integration-"+uuid.uuid4().hex[:8],"description":"contract"})=="201"
+          p=json.load(open("/tmp/r")); pid=p["project"]["id"]
+          assert req("POST",f"/v1/projects/{pid}/files",{"path":"index.html","content":"<html><body>contract</body></html>"})=="201"
+          f=json.load(open("/tmp/r")); fid=f["file"]["id"]
+          assert req("GET",f"/v1/projects/{pid}/files/{fid}")=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["file"]["content"]
+          assert req("POST",f"/v1/projects/{pid}/files",{"path":"../blocked","content":"x"})=="400"
+          assert req("DELETE",f"/v1/projects/{pid}/files/{fid}")=="200"
+          assert req("DELETE",f"/v1/projects/{pid}")=="200"
+          assert req("GET",f"/v1/projects/{pid}")=="404"
+          print("189-192 PASS")
+          PY
+
+      - name: Final certification
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]
+          d=json.loads(subprocess.check_output(["curl","-sS",f"{base}/v1/"]))
+          assert d["name"]=="4N DEV API" and d["version"]=="v1"
+          print("API INTEGRATION CONTRACT 177-192 PASS")
+          PY
