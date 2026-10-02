@@ -1,0 +1,87 @@
+name: Builder Performance Reliability Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reliability:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Builder performance and reliability validation
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+          API="https://fourn-dev-core.onrender.com/v1"
+          AUTH="Authorization: Bearer $CORE_API_KEY"
+          CONTENT="Content-Type: application/json"
+          PROJECT_IDS=""
+          cleanup() {
+            for ID in $PROJECT_IDS; do
+              curl -sS -X DELETE "$API/projects/$ID" -H "$AUTH" >/dev/null || true
+            done
+          }
+          trap cleanup EXIT
+
+          echo "1. Planner latency and reliability"
+          START=$(date +%s%3N)
+          for i in 1 2 3; do
+            PLAN_BODY=$(jq -n --arg p "Create dashboard reliability test $i" '{prompt:$p}')
+            PLAN=$(curl -sS --fail-with-body --max-time 30 -X POST "$API/builder/plan" -H "$AUTH" -H "$CONTENT" -d "$PLAN_BODY")
+            echo "$PLAN" | jq -e '.success == true and (.plan.project_type | type) == "string"' >/dev/null
+          done
+          END=$(date +%s%3N)
+          PLAN_MS=$((END-START))
+          echo "PLANNER 3 REQUESTS OK: ${PLAN_MS}ms"
+
+          echo "2. Builder sequential reliability"
+          START=$(date +%s%3N)
+          for i in 1 2; do
+            BUILD_BODY=$(jq -n --arg n "Stage 21 Reliability $i" --arg p "Create a small dashboard reliability test $i" '{prompt:$p,projectName:$n}')
+            BUILD=$(curl -sS --fail-with-body --max-time 45 -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d "$BUILD_BODY")
+            echo "$BUILD" | jq -e '.success == true and (.project.id | type) == "string" and (.files | length) > 0' >/dev/null
+            ID=$(echo "$BUILD" | jq -r '.project.id')
+            test -n "$ID" && test "$ID" != "null"
+            PROJECT_IDS="$PROJECT_IDS $ID"
+            echo "BUILDER REQUEST $i OK: $ID"
+          done
+          END=$(date +%s%3N)
+          BUILD_MS=$((END-START))
+          echo "BUILDER 2 REQUESTS OK: ${BUILD_MS}ms"
+
+          echo "3. Persistence reliability"
+          for ID in $PROJECT_IDS; do
+            PROJECT=$(curl -sS --fail-with-body --max-time 20 "$API/projects/$ID" -H "$AUTH")
+            echo "$PROJECT" | jq -e --arg id "$ID" '.success == true and .project.id == $id' >/dev/null
+            FILES=$(curl -sS --fail-with-body --max-time 20 "$API/projects/$ID/files" -H "$AUTH")
+            echo "$FILES" | jq -e --arg id "$ID" '.success == true and (.files | length) > 0 and all(.files[]; .projectId == $id)' >/dev/null
+          done
+          echo "PERSISTENCE RELIABILITY OK"
+
+          echo "4. Invalid request recovery"
+          CODE=$(curl -sS -o /tmp/invalid.json -w "%{http_code}" --max-time 20 -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d '{"prompt":"   "}')
+          test "$CODE" = "400"
+          jq -e '.success == false and .error == "prompt is required"' /tmp/invalid.json >/dev/null
+          echo "INVALID REQUEST HANDLED OK"
+
+          echo "5. Recovery after invalid request"
+          RECOVER=$(curl -sS --fail-with-body --max-time 45 -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d '{"prompt":"Create a recovery dashboard","projectName":"Stage 21 Recovery"}')
+          echo "$RECOVER" | jq -e '.success == true and (.project.id | type) == "string" and (.files | length) > 0' >/dev/null
+          RECOVER_ID=$(echo "$RECOVER" | jq -r '.project.id')
+          PROJECT_IDS="$PROJECT_IDS $RECOVER_ID"
+          echo "RECOVERY REQUEST OK: $RECOVER_ID"
+
+          echo "6. Security recovery"
+          CODE=$(curl -sS -o /tmp/noauth21.json -w "%{http_code}" --max-time 20 "$API/projects/$RECOVER_ID")
+          test "$CODE" = "401"
+          echo "SECURITY BOUNDARY OK"
+
+          echo "7. Cleanup reliability"
+          for ID in $PROJECT_IDS; do
+            DELETE=$(curl -sS --fail-with-body --max-time 20 -X DELETE "$API/projects/$ID" -H "$AUTH")
+            echo "$DELETE" | jq -e '.success == true and .deleted == true' >/dev/null
+            test "$(curl -sS -o /tmp/deleted21.json -w "%{http_code}" --max-time 20 "$API/projects/$ID" -H "$AUTH")" = "404"
+          done
+          PROJECT_IDS=""
+          echo "CLEANUP RELIABILITY OK"
+          echo "BUILDER PERFORMANCE & RELIABILITY VALIDATION PASSED"
