@@ -1,0 +1,102 @@
+name: Production Reliability Recovery Stages 193-208
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reliability-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 193-196 Health and API recovery
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]
+          def get(path):
+              return subprocess.check_output(["curl","-sS","-o","/tmp/r","-w","%{http_code}",f"{base}{path}"],text=True)
+          for _ in range(3):
+              assert get("/health")=="200"
+              d=json.load(open("/tmp/r")); assert d["success"] is True and d["status"]=="online"
+              assert get("/v1/")=="200"
+              d=json.load(open("/tmp/r")); assert d["name"]=="4N DEV API" and d["version"]=="v1"
+          print("193-196 PASS")
+          PY
+
+      - name: 197-200 Authentication and credit safety
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          def req(path, token=None, body=None):
+              args=["curl","-sS","-o","/tmp/r","-w","%{http_code}"]
+              if token: args += ["-H",f"Authorization: Bearer {token}"]
+              if body is not None: args += ["-H","Content-Type: application/json","-d",json.dumps(body)]
+              return subprocess.check_output(args+[f"{base}{path}"],text=True)
+          assert req("/v1/me")=="401"
+          assert req("/v1/me","invalid-key")=="401"
+          assert req("/v1/credits",key)=="200"
+          before=json.load(open("/tmp/r"))["credits"]
+          assert req("/v1/chat",key,{"input":123})=="400"
+          assert req("/v1/credits",key)=="200"
+          after=json.load(open("/tmp/r"))["credits"]
+          assert after==before
+          print("197-200 PASS")
+          PY
+
+      - name: 201-204 Project and file recovery lifecycle
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json, uuid
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          def req(method,path,body=None):
+              args=["curl","-sS","-o","/tmp/r","-w","%{http_code}","-X",method,"-H",f"Authorization: Bearer {key}"]
+              if body is not None: args += ["-H","Content-Type: application/json","-d",json.dumps(body)]
+              return subprocess.check_output(args+[f"{base}{path}"],text=True)
+          name="recovery-"+uuid.uuid4().hex[:8]
+          assert req("POST","/v1/projects",{"name":name,"description":"recovery"})=="201"
+          p=json.load(open("/tmp/r")); pid=p["project"]["id"]
+          assert req("POST",f"/v1/projects/{pid}/files",{"path":"recovery.txt","content":"recovery-ok"})=="201"
+          f=json.load(open("/tmp/r")); fid=f["file"]["id"]
+          assert req("GET",f"/v1/projects/{pid}/files/{fid}")=="200"
+          d=json.load(open("/tmp/r")); assert d["file"]["content"]=="recovery-ok"
+          assert req("PUT",f"/v1/projects/{pid}/files/{fid}",{"path":"recovery.txt","content":"recovery-updated"})=="200"
+          assert req("GET",f"/v1/projects/{pid}/files/{fid}")=="200"
+          d=json.load(open("/tmp/r")); assert d["file"]["content"]=="recovery-updated"
+          assert req("DELETE",f"/v1/projects/{pid}/files/{fid}")=="200"
+          assert req("DELETE",f"/v1/projects/{pid}")=="200"
+          assert req("GET",f"/v1/projects/{pid}")=="404"
+          print("201-204 PASS")
+          PY
+
+      - name: 205-208 Final resilience and security smoke
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+          python - <<'PY'
+          import os, subprocess, json
+          base=os.environ["BASE_URL"]; key=os.environ["API_KEY"]
+          def req(path, token=None):
+              args=["curl","-sS","-o","/tmp/r","-w","%{http_code}"]
+              if token: args += ["-H",f"Authorization: Bearer {token}"]
+              return subprocess.check_output(args+[f"{base}{path}"],text=True)
+          assert req("/v1/me",key)=="200"
+          d=json.load(open("/tmp/r")); assert d["success"] is True and d["developer"]["active"] is True
+          assert req("/v1/projects/nonexistent-193-208",key)=="404"
+          assert req("/v1/files/nonexistent-193-208",key)=="404"
+          assert req("/v1/me")=="401"
+          assert req("/health")=="200"
+          print("205-208 PASS")
+          PY
