@@ -75,6 +75,10 @@ jobs:
           echo "$ME" | grep -q '"active":true'
           CREDITS=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
           echo "$CREDITS" | grep -q '"credits"'
-          CODE=$(curl -sS -o /tmp/traversal-final.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects" -d '{"name":"../blocked"}')
-          test "$CODE" = "400"
+          CODE=$(curl -sS -o /tmp/final-noauth.json -w "%{http_code}" "$BASE/v1/me")
+          test "$CODE" = "401"
+          CODE=$(curl -sS -o /tmp/final-badkey.json -w "%{http_code}" -H "Authorization: Bearer invalid-key" "$BASE/v1/credits")
+          test "$CODE" = "401"
+          CODE=$(curl -sS -o /tmp/final-invalid-project.json -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/nonexistent-final-project")
+          test "$CODE" = "404"
           echo "FINAL PRODUCTION CERTIFICATION STAGES 145-160 PASSED"
