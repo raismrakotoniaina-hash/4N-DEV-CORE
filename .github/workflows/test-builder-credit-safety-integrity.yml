@@ -1,0 +1,84 @@
+name: Builder Credit Safety Transaction Integrity Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  credit-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate credit safety and transaction integrity
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          BASE="https://fourn-dev-core.onrender.com"
+          API="$BASE/v1"
+          AUTH=(-H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json")
+
+          echo "1. Read credit policy"
+          POLICY=$(curl -fsS "$API/credit-policy")
+          BUILDER_COST=$(echo "$POLICY" | jq -r '.policy.builder.credits')
+          PLANNER_COST=$(echo "$POLICY" | jq -r '.policy.planner.credits')
+          test "$BUILDER_COST" -gt 0
+          test "$PLANNER_COST" -gt 0
+          echo "CREDIT POLICY COSTS OK: builder=$BUILDER_COST planner=$PLANNER_COST"
+
+          echo "2. Capture initial balance"
+          BEFORE=$(curl -fsS "${AUTH[@]}" "$API/credits")
+          B0=$(echo "$BEFORE" | jq -r '.credits')
+          test "$B0" -ge "$BUILDER_COST"
+          echo "INITIAL BALANCE OK: $B0"
+
+          echo "3. Invalid Builder prompt must not spend credits"
+          BAD=$(curl -sS -o /tmp/bad.json -w "%{http_code}" "${AUTH[@]}" -X POST "$API/builder" -d '{"prompt":"   "}')
+          test "$BAD" = "400"
+          test "$(jq -r '.error' /tmp/bad.json)" = "prompt is required"
+          B1=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B1" -eq "$B0"
+          echo "INVALID REQUEST CREDIT SAFETY OK"
+
+          echo "4. Invalid project must not spend credits"
+          BAD_PROJECT=$(curl -sS -o /tmp/bad-project.json -w "%{http_code}" "${AUTH[@]}" -X POST "$API/builder" -d '{"prompt":"Create a small test page","projectId":"00000000-0000-0000-0000-000000000000"}')
+          test "$BAD_PROJECT" = "404"
+          test "$(jq -r '.error' /tmp/bad-project.json)" = "Project not found"
+          B2=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B2" -eq "$B1"
+          echo "INVALID PROJECT CREDIT SAFETY OK"
+
+          echo "5. Builder review must be credit-free"
+          REVIEW=$(jq -n '{files:[{path:"index.html",content:"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head><body>credit test</body></html>"}]}')
+          REVIEW_CODE=$(curl -sS -o /tmp/review.json -w "%{http_code}" "${AUTH[@]}" -X POST "$API/builder/review" -d "$REVIEW")
+          test "$REVIEW_CODE" = "200"
+          test "$(jq -r '.review.passed' /tmp/review.json)" = "true"
+          B3=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B3" -eq "$B2"
+          echo "REVIEW CREDIT SAFETY OK"
+
+          echo "6. Successful Builder must spend exactly builder cost"
+          BUILD=$(curl -fsS "${AUTH[@]}" -X POST "$API/builder" -d '{"prompt":"Create a small business test website"}')
+          test "$(echo "$BUILD" | jq -r '.success')" = "true"
+          PROJECT_ID=$(echo "$BUILD" | jq -r '.project.id')
+          test -n "$PROJECT_ID"
+          test "$(echo "$BUILD" | jq -r '.credits_used')" -eq "$BUILDER_COST"
+          B4=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B4" -eq "$((B3 - BUILDER_COST))"
+          echo "BUILDER DEBIT INTEGRITY OK: $B3 -> $B4"
+
+          echo "7. Successful Planner must spend exactly planner cost"
+          PLAN=$(curl -fsS "${AUTH[@]}" -X POST "$API/builder/plan" -d '{"prompt":"Create a dashboard for testing credit accounting"}')
+          test "$(echo "$PLAN" | jq -r '.success')" = "true"
+          test "$(echo "$PLAN" | jq -r '.credits_used')" -eq "$PLANNER_COST"
+          B5=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B5" -eq "$((B4 - PLANNER_COST))"
+          echo "PLANNER DEBIT INTEGRITY OK: $B4 -> $B5"
+
+          echo "8. Cleanup generated project"
+          DELETE_CODE=$(curl -sS -o /tmp/delete.json -w "%{http_code}" "${AUTH[@]}" -X DELETE "$API/projects/$PROJECT_ID")
+          test "$DELETE_CODE" = "200"
+          VERIFY_CODE=$(curl -sS -o /tmp/delete-verify.json -w "%{http_code}" "${AUTH[@]}" "$API/projects/$PROJECT_ID")
+          test "$VERIFY_CODE" = "404"
+          echo "CLEANUP OK"
+
+          echo "BUILDER CREDIT SAFETY & TRANSACTION INTEGRITY PASSED"
