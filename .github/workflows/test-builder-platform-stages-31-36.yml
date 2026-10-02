@@ -54,13 +54,17 @@ jobs:
           test -n "$project_id"
           file=$(curl -fsS -X POST "$BASE_URL/v1/projects/$project_id/files" -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"path":"index.html","content":"<html><body>Stage 34</body></html>"}')
           echo "$file" | grep -q '"success":true'
+          file_id=$(echo "$file" | sed -n 's/.*"file":{"id":"\([^"]*\)".*/\1/p')
+          test -n "$file_id"
           listed=$(curl -fsS -H "Authorization: Bearer $API_KEY" "$BASE_URL/v1/projects/$project_id/files")
           echo "$listed" | grep -q 'index.html'
-          updated=$(curl -fsS -X PUT "$BASE_URL/v1/projects/$project_id/files/index.html" -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"content":"<html><body>Stage 34 updated</body></html>"}')
+          updated=$(curl -fsS -X PUT "$BASE_URL/v1/projects/$project_id/files/$file_id" -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"content":"<html><body>Stage 34 updated</body></html>"}')
           echo "$updated" | grep -q '"success":true'
-          readback=$(curl -fsS -H "Authorization: Bearer $API_KEY" "$BASE_URL/v1/projects/$project_id/files/index.html")
+          updated_file_id=$(echo "$updated" | sed -n 's/.*"file":{"id":"\([^"]*\)".*/\1/p')
+          test -n "$updated_file_id"
+          readback=$(curl -fsS -H "Authorization: Bearer $API_KEY" "$BASE_URL/v1/projects/$project_id/files/$updated_file_id")
           echo "$readback" | grep -q 'Stage 34 updated'
-          deleted_file=$(curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id/files/index.html" -H "Authorization: Bearer $API_KEY")
+          deleted_file=$(curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id/files/$updated_file_id" -H "Authorization: Bearer $API_KEY")
           echo "$deleted_file" | grep -q '"success":true'
           deleted_project=$(curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id" -H "Authorization: Bearer $API_KEY")
           echo "$deleted_project" | grep -q '"success":true'
