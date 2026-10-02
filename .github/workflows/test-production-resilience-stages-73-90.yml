@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BASE_URL: https://fourn-dev-core.onrender.com
-      API_KEY: ${{ secrets.CORE_API_KEY }}
+      API_KEY: \${{ secrets.CORE_API_KEY }}
     steps:
       - name: Stages 73-74 API and lifecycle
         run: |
@@ -30,7 +30,7 @@ jobs:
           test -n "$FID"
           curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID" | grep -q 'stage-74'
           curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X PATCH "$BASE/v1/projects/$PID" -d '{"description":"updated-stage-74"}' | grep -q 'updated-stage-74'
-          curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/files/$FID" >/dev/null
+          curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID/files/$FID" >/dev/null
           curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID" >/dev/null
           CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID")
           test "$CODE" = "404"
