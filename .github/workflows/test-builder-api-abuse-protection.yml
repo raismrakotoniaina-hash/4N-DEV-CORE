@@ -1,0 +1,63 @@
+name: Builder API Abuse Protection Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  abuse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Builder abuse and boundary validation
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          API="https://fourn-dev-core.onrender.com/v1"
+          AUTH="Authorization: Bearer $CORE_API_KEY"
+          CONTENT="Content-Type: application/json"
+
+          echo "1. Public health burst"
+          for i in 1 2 3 4 5; do
+            HEALTH=$(curl -sS --fail-with-body --max-time 15 "$API/../health")
+            echo "$HEALTH" | jq -e '.success == true and .status == "online"' >/dev/null
+          done
+          echo "HEALTH BURST OK"
+
+          echo "2. Invalid authentication burst"
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sS -o "/tmp/bad-auth-$i.json" -w "%{http_code}" --max-time 15 "$API/credits" -H "Authorization: Bearer invalid-key-$i")
+            test "$CODE" = "401"
+            jq -e '.success == false and .error == "Invalid or revoked 4N DEV API key"' "/tmp/bad-auth-$i.json" >/dev/null
+          done
+          echo "INVALID AUTH BURST PROTECTED OK"
+
+          echo "3. Missing authentication burst"
+          for i in 1 2 3; do
+            CODE=$(curl -sS -o "/tmp/no-auth-$i.json" -w "%{http_code}" --max-time 15 "$API/projects")
+            test "$CODE" = "401"
+            jq -e '.success == false and .error == "Missing 4N DEV API key"' "/tmp/no-auth-$i.json" >/dev/null
+          done
+          echo "MISSING AUTH BURST PROTECTED OK"
+
+          echo "4. Malformed builder input burst"
+          for i in 1 2 3; do
+            CODE=$(curl -sS -o "/tmp/bad-builder-$i.json" -w "%{http_code}" --max-time 20               -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d '{"prompt":"   "}')
+            test "$CODE" = "400"
+            jq -e '.success == false and .error == "prompt is required"' "/tmp/bad-builder-$i.json" >/dev/null
+          done
+          echo "MALFORMED BUILDER BURST HANDLED OK"
+
+          echo "5. Recovery after abuse-like traffic"
+          RECOVER=$(curl -sS --fail-with-body --max-time 45 -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a small recovery dashboard","projectName":"Stage 22 Recovery"}')
+          echo "$RECOVER" | jq -e '.success == true and (.project.id | type) == "string" and (.files | length) > 0' >/dev/null
+          PROJECT_ID=$(echo "$RECOVER" | jq -r '.project.id')
+          echo "RECOVERY OK: $PROJECT_ID"
+
+          echo "6. Recovery cleanup"
+          DELETE=$(curl -sS --fail-with-body --max-time 20 -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH")
+          echo "$DELETE" | jq -e '.success == true and .deleted == true' >/dev/null
+          test "$(curl -sS -o /tmp/stage22-deleted.json -w "%{http_code}" --max-time 20 "$API/projects/$PROJECT_ID" -H "$AUTH")" = "404"
+          echo "CLEANUP OK"
+
+          echo "BUILDER API ABUSE PROTECTION VALIDATION PASSED"
