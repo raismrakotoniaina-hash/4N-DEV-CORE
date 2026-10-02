@@ -47,7 +47,7 @@ jobs:
           KEY="$API_KEY"
           PROJECT=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects" -d '{"name":"final-cert-project","description":"stage-153"}')
           PID=$(echo "$PROJECT" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
-          FILE=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/files/projects/$PID/files" -d '{"path":"index.html","content":"<html><body>final</body></html>"}')
+          FILE=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects/$PID/files" -d '{"path":"index.html","content":"<html><body>final</body></html>"}')
           FID=$(echo "$FILE" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
           CODE=$(curl -sS -o /tmp/get-final-file.json -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID")
           test "$CODE" = "200"
