@@ -78,5 +78,5 @@ jobs:
           HEALTH=$(curl -fsS "$BASE_URL/health")
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["status"]=="online"' <<<"$HEALTH"
           V1=$(curl -fsS "$BASE_URL/v1/")
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d["name"]=="4N DEV API"; assert d["version"]=="v1"'
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["name"]=="4N DEV API"; assert d["version"]=="v1"' <<<"$V1"
           echo "PASS: stages 209-224"
