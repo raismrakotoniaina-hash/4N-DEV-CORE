@@ -74,6 +74,28 @@ export function authenticateApiKey(key) {
   return record || null;
 }
 
+export function listApiKeys(apiKeyId = null) {
+  const keys = readKeys().filter((item) => item.id !== "core-bootstrap-key");
+  return apiKeyId ? keys.filter((item) => item.id === apiKeyId) : keys;
+}
+
+export function setApiKeyActive(apiKeyId, active) {
+  if (!apiKeyId || typeof active !== "boolean") return null;
+
+  const keys = readKeys();
+  const index = keys.findIndex((item) => item.id === apiKeyId);
+  if (index === -1) return null;
+
+  keys[index] = {
+    ...keys[index],
+    active,
+    updatedAt: new Date().toISOString()
+  };
+
+  writeKeys(keys);
+  return keys[index];
+}
+
 export function updateApiKeyPlan(apiKeyId, planId) {
   if (!apiKeyId || !planId) return null;
 
