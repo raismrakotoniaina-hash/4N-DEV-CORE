@@ -23,12 +23,12 @@ function reviewGeneratedFiles(files) {
     issues.push("Missing index.html entry point");
   }
 
-  const htmlFiles = files.filter(file => /\\.html$/i.test(file.path));
-  const jsFiles = files.filter(file => /\\.js$/i.test(file.path));
-  const cssFiles = files.filter(file => /\\.css$/i.test(file.path));
+  const htmlFiles = files.filter(file => /\.html$/i.test(file.path));
+  const jsFiles = files.filter(file => /\.js$/i.test(file.path));
+  const cssFiles = files.filter(file => /\.css$/i.test(file.path));
 
   for (const file of htmlFiles) {
-    if (!/<html[\\s>]/i.test(file.content)) issues.push(`Invalid HTML document structure: ${file.path}`);
+    if (!/<html[\s>]/i.test(file.content)) issues.push(`Invalid HTML document structure: ${file.path}`);
     if (!/<meta[^>]+viewport/i.test(file.content)) warnings.push(`Missing mobile viewport: ${file.path}`);
   }
 
@@ -52,7 +52,7 @@ function reviewGeneratedFiles(files) {
     files_checked: files.length,
     checks: {
       entry_point: paths.has("index.html"),
-      html_structure: htmlFiles.every(file => /<html[\\s>]/i.test(file.content)),
+      html_structure: htmlFiles.every(file => /<html[\s>]/i.test(file.content)),
       no_embedded_secrets: !issues.some(issue => /secret|api key/i.test(issue))
     }
   };
