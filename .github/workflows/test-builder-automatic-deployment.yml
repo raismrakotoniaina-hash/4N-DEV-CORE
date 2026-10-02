@@ -1,0 +1,70 @@
+name: Test Builder Automatic Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  builder-deploy:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Check Core health
+        run: |
+          curl -fsS "$BASE_URL/health" | grep -q '"status":"online"'
+
+      - name: Run AI Builder and verify automatic deployment
+        run: |
+          set -euo pipefail
+
+          RESPONSE=$(curl -fsS -X POST "$BASE_URL/v1/builder"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data '{"prompt":"Create a simple public landing page for 4N DEV with a heading, short description, and responsive styling."}')
+
+          echo "$RESPONSE" > builder-response.json
+
+          node - <<'NODE'
+          const fs = require("fs");
+          const body = JSON.parse(fs.readFileSync("builder-response.json", "utf8"));
+
+          if (body.success !== true) {
+            throw new Error("Builder failed: " + JSON.stringify(body));
+          }
+
+          if (!body.project?.id) throw new Error("Missing project.id");
+          if (!Array.isArray(body.files) || body.files.length === 0) {
+            throw new Error("Builder returned no files");
+          }
+          if (!body.files.some(f => f.path === "index.html")) {
+            throw new Error("Builder output has no index.html");
+          }
+          if (body.review?.passed !== true) {
+            throw new Error("Builder review did not pass");
+          }
+          if (body.deployment?.status !== "deployed") {
+            throw new Error("Automatic deployment did not complete");
+          }
+          if (!body.deployment?.slug) {
+            throw new Error("Missing deployment slug");
+          }
+
+          console.log("Builder automatic deployment created:", body.deployment.url);
+          console.log("Deployment slug:", body.deployment.slug);
+
+          fs.writeFileSync("deployment-url.txt", body.deployment.url);
+          NODE
+
+      - name: Verify public deployed site
+        run: |
+          set -euo pipefail
+
+          RELATIVE_URL=$(cat deployment-url.txt)
+          PUBLIC_URL="$BASE_URL$RELATIVE_URL"
+
+          echo "Checking $PUBLIC_URL"
+
+          HTML=$(curl -fsS "$PUBLIC_URL")
+          echo "$HTML" | grep -qi "4N DEV"
+
+      - name: Final result
+        run: echo "AI Builder automatic deployment test passed."
