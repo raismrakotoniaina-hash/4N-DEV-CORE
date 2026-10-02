@@ -1,0 +1,32 @@
+name: Test New Features
+
+on:
+  workflow_dispatch:
+
+jobs:
+  new-features:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test usage and API key lifecycle
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          echo "== Health =="
+          curl -fsS "$BASE_URL/health" | python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["status"]=="online"'
+
+          echo "== Usage requires authentication =="
+          STATUS=$(curl -sS -o /tmp/noauth.json -w "%{http_code}" "$BASE_URL/v1/usage")
+          test "$STATUS" = "401"
+
+          echo "== Authenticated usage =="
+          USAGE=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/usage")
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert isinstance(d["usage"],list); assert "pagination" in d' <<<"$USAGE"
+
+          echo "== API key listing =="
+          KEYS=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/keys")
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert isinstance(d["keys"],list); assert all("hash" not in k for k in d["keys"])' <<<"$KEYS"
+
+          echo "New usage/key lifecycle checks passed."
