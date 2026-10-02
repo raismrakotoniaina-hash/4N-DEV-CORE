@@ -17,7 +17,6 @@ jobs:
           AUTH="Authorization: Bearer $CORE_API_KEY"
           CONTENT="Content-Type: application/json"
           PROJECT_ID=""
-          FILE_ID=""
 
           cleanup() {
             if [ -n "$PROJECT_ID" ]; then
@@ -39,7 +38,8 @@ jobs:
           echo "CREDIT POLICY CONTRACT OK"
 
           echo "2. Validate Planner response schema"
-          PLAN=$(curl -sS -X POST "$API/builder/plan"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a small business dashboard with clients and invoices"}')
+          PLAN_BODY=$(jq -n '{prompt:"Create a small business dashboard with clients and invoices"}')
+          PLAN=$(curl -sS -X POST "$API/builder/plan" -H "$AUTH" -H "$CONTENT" -d "$PLAN_BODY")
           echo "$PLAN" | jq -e '
             .success == true and
             (.plan | type) == "object" and
@@ -57,7 +57,8 @@ jobs:
           echo "PLANNER CONTRACT OK"
 
           echo "3. Validate Builder response schema"
-          BUILD=$(curl -sS -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a simple business website with services and contact","projectName":"Stage 18 Contract Test"}')
+          BUILD_BODY=$(jq -n '{prompt:"Create a simple business website with services and contact",projectName:"Stage 18 Contract Test"}')
+          BUILD=$(curl -sS -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d "$BUILD_BODY")
           echo "$BUILD" | jq -e '
             .success == true and
             (.project | type) == "object" and
@@ -125,7 +126,19 @@ jobs:
           echo "FILE READ CONTRACT OK"
 
           echo "6. Validate Review response schema"
-          REVIEW=$(curl -sS -X POST "$API/builder/review"             -H "$AUTH" -H "$CONTENT"             -d '{"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><h1>Stage 18</h1></body></html>"},{"path":"styles.css","content":"body{margin:0}"}]}')
+          REVIEW_BODY=$(jq -n '{
+            files: [
+              {
+                path: "index.html",
+                content: "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head><body><h1>Stage 18</h1></body></html>"
+              },
+              {
+                path: "styles.css",
+                content: "body{margin:0}"
+              }
+            ]
+          }')
+          REVIEW=$(curl -sS -X POST "$API/builder/review" -H "$AUTH" -H "$CONTENT" -d "$REVIEW_BODY")
           echo "$REVIEW" | jq -e '
             (.success | type) == "boolean" and
             (.review | type) == "object" and
