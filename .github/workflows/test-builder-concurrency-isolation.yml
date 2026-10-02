@@ -1,0 +1,98 @@
+name: Builder Concurrency Isolation Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate concurrent builder project isolation
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          API="https://fourn-dev-core.onrender.com/v1"
+          AUTH="Authorization: Bearer $CORE_API_KEY"
+          CONTENT="Content-Type: application/json"
+          PROJECT_A=""
+          PROJECT_B=""
+
+          cleanup() {
+            for ID in "$PROJECT_A" "$PROJECT_B"; do
+              if [ -n "$ID" ]; then
+                curl -sS -X DELETE "$API/projects/$ID" -H "$AUTH" >/dev/null || true
+              fi
+            done
+          }
+          trap cleanup EXIT
+
+          echo "1. Create two independent Builder projects"
+          curl -sS -o /tmp/a.json -w "%{http_code}" -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a business dashboard for customers and invoices","projectName":"Stage 17 Project A"}' > /tmp/a.code
+          test "$(cat /tmp/a.code)" = "200"
+          jq -e '.success == true' /tmp/a.json >/dev/null
+          PROJECT_A=$(jq -r '.project.id' /tmp/a.json)
+          test -n "$PROJECT_A" && test "$PROJECT_A" != "null"
+
+          curl -sS -o /tmp/b.json -w "%{http_code}" -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a booking website for appointments and availability","projectName":"Stage 17 Project B"}' > /tmp/b.code
+          test "$(cat /tmp/b.code)" = "200"
+          jq -e '.success == true' /tmp/b.json >/dev/null
+          PROJECT_B=$(jq -r '.project.id' /tmp/b.json)
+          test -n "$PROJECT_B" && test "$PROJECT_B" != "null"
+          test "$PROJECT_A" != "$PROJECT_B"
+          echo "PROJECT ISOLATION OK: $PROJECT_A != $PROJECT_B"
+
+          echo "2. Verify each project has exactly its own generated files"
+          A_FILES=$(curl -sS "$API/projects/$PROJECT_A/files" -H "$AUTH")
+          B_FILES=$(curl -sS "$API/projects/$PROJECT_B/files" -H "$AUTH")
+          echo "$A_FILES" | jq -e '.success == true and (.files | length) == 3' >/dev/null
+          echo "$B_FILES" | jq -e '.success == true and (.files | length) == 3' >/dev/null
+          echo "$A_FILES" | jq -e --arg pid "$PROJECT_A" 'all(.files[]; .projectId == $pid)' >/dev/null
+          echo "$B_FILES" | jq -e --arg pid "$PROJECT_B" 'all(.files[]; .projectId == $pid)' >/dev/null
+          echo "INITIAL FILE ISOLATION OK"
+
+          echo "3. Update Project A through Builder"
+          curl -sS -o /tmp/a_update.json -w "%{http_code}" -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d "{\"prompt\":\"Update this project with an analytics section\",\"projectId\":\"$PROJECT_A\"}" > /tmp/a_update.code
+          test "$(cat /tmp/a_update.code)" = "200"
+          jq -e --arg pid "$PROJECT_A" '.success == true and .project.id == $pid' /tmp/a_update.json >/dev/null
+          echo "PROJECT A UPDATE OK"
+
+          echo "4. Verify Project B remains isolated after Project A update"
+          B_AFTER=$(curl -sS "$API/projects/$PROJECT_B/files" -H "$AUTH")
+          echo "$B_AFTER" | jq -e '.success == true and (.files | length) == 3' >/dev/null
+          echo "$B_AFTER" | jq -e --arg pid "$PROJECT_B" 'all(.files[]; .projectId == $pid)' >/dev/null
+          echo "PROJECT B ISOLATION AFTER A UPDATE OK"
+
+          echo "5. Update Project B through Builder"
+          curl -sS -o /tmp/b_update.json -w "%{http_code}" -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d "{\"prompt\":\"Update this project with a confirmation page\",\"projectId\":\"$PROJECT_B\"}" > /tmp/b_update.code
+          test "$(cat /tmp/b_update.code)" = "200"
+          jq -e --arg pid "$PROJECT_B" '.success == true and .project.id == $pid' /tmp/b_update.json >/dev/null
+          echo "PROJECT B UPDATE OK"
+
+          echo "6. Verify Project A remains isolated after Project B update"
+          A_AFTER=$(curl -sS "$API/projects/$PROJECT_A/files" -H "$AUTH")
+          echo "$A_AFTER" | jq -e '.success == true and (.files | length) == 3' >/dev/null
+          echo "$A_AFTER" | jq -e --arg pid "$PROJECT_A" 'all(.files[]; .projectId == $pid)' >/dev/null
+          echo "PROJECT A ISOLATION AFTER B UPDATE OK"
+
+          echo "7. Verify cross-project file access is rejected"
+          A_FILE_ID=$(echo "$A_AFTER" | jq -r '.files[0].id')
+          CROSS=$(curl -sS -o /tmp/cross.json -w "%{http_code}"             "$API/projects/$PROJECT_B/files/$A_FILE_ID" -H "$AUTH")
+          test "$CROSS" = "404"
+          jq -e '.success == false and .error == "File not found"' /tmp/cross.json >/dev/null
+          echo "CROSS-PROJECT ACCESS BLOCKED OK"
+
+          echo "8. Delete both projects and verify isolation cleanup"
+          curl -sS -o /tmp/delete_a.json -w "%{http_code}" -X DELETE "$API/projects/$PROJECT_A" -H "$AUTH" > /tmp/delete_a.code
+          test "$(cat /tmp/delete_a.code)" = "200"
+          curl -sS -o /tmp/delete_b.json -w "%{http_code}" -X DELETE "$API/projects/$PROJECT_B" -H "$AUTH" > /tmp/delete_b.code
+          test "$(cat /tmp/delete_b.code)" = "200"
+
+          test "$(curl -sS -o /tmp/check_a.json -w "%{http_code}" "$API/projects/$PROJECT_A" -H "$AUTH")" = "404"
+          test "$(curl -sS -o /tmp/check_b.json -w "%{http_code}" "$API/projects/$PROJECT_B" -H "$AUTH")" = "404"
+          PROJECT_A=""
+          PROJECT_B=""
+          echo "CLEANUP ISOLATION OK"
+
+          echo "BUILDER CONCURRENCY & ISOLATION VALIDATION PASSED"
