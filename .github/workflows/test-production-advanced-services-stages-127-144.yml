@@ -1,0 +1,100 @@
+name: Test Production Advanced Services Stages 127-144
+
+on:
+  workflow_dispatch:
+
+jobs:
+  advanced-services-127-144:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Stages 127-130 Embeddings contract and feature boundary
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          ME=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me")
+          echo "$ME" | grep -q '"active":true'
+          CODE=$(curl -sS -o /tmp/embed-bad.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/embeddings" -d '{"input":123}')
+          test "$CODE" = "400"
+          CODE=$(curl -sS -o /tmp/embed-empty-array.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/embeddings" -d '{"input":[]}')
+          test "$CODE" != "500"
+          RESULT=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/embeddings" -d '{"input":"stage-127-embedding"}')
+          echo "$RESULT" | grep -q '"success":true'
+          echo "$RESULT" | grep -q '"credits_used":1'
+          echo "$RESULT" | grep -q '"data"'
+          echo "Stages 127-130 passed"
+
+      - name: Stages 131-134 Billing plans providers and order validation
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          PLANS=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/billing/plans")
+          echo "$PLANS" | grep -q '"currency_options"'
+          echo "$PLANS" | grep -q '"premium"'
+          PROVIDERS=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/billing/providers")
+          echo "$PROVIDERS" | grep -q '"providers"'
+          echo "$PROVIDERS" | grep -q '"papi"'
+          CODE=$(curl -sS -o /tmp/free-order.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/orders" -d '{"planId":"free","currency":"MGA"}')
+          test "$CODE" = "400"
+          CODE=$(curl -sS -o /tmp/bad-currency.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/orders" -d '{"planId":"pro","currency":"XYZ"}')
+          test "$CODE" = "400"
+          ORDER=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/orders" -d '{"planId":"pro","currency":"MGA"}')
+          echo "$ORDER" | grep -q '"success":true'
+          echo "$ORDER" | grep -q '"status":"pending"'
+          echo "$ORDER" | grep -q '"amount":145000'
+          echo "Stages 131-134 passed"
+
+      - name: Stages 135-138 Payment lifecycle and ownership
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          ORDER=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/orders" -d '{"planId":"starter","currency":"MGA"}')
+          OID=$(echo "$ORDER" | python -c 'import json,sys; print(json.load(sys.stdin)["order"]["id"])')
+          CODE=$(curl -sS -o /tmp/bad-provider.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/orders/$OID/payments" -d '{"provider":"unknown"}')
+          test "$CODE" = "400"
+          PAYMENT=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/orders/$OID/payments" -d '{"provider":"papi"}')
+          echo "$PAYMENT" | grep -q '"success":true'
+          echo "$PAYMENT" | grep -q '"provider"'
+          PAYID=$(echo "$PAYMENT" | python -c 'import json,sys; print(json.load(sys.stdin)["payment"]["id"])')
+          GOT=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/billing/payments/$PAYID")
+          echo "$GOT" | grep -q '"success":true'
+          echo "$GOT" | grep -q '"status":"pending"'
+          CODE=$(curl -sS -o /tmp/missing-payment.json -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/billing/payments/nonexistent-payment-id")
+          test "$CODE" = "404"
+          echo "Stages 135-138 passed"
+
+      - name: Stages 139-141 Payment pages and webhook boundary
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          SUCCESS=$(curl -fsS "$BASE/payment/success")
+          echo "$SUCCESS" | grep -q '"payment_status":"success"'
+          FAILURE=$(curl -fsS "$BASE/payment/failure")
+          echo "$FAILURE" | grep -q '"payment_status":"failure"'
+          CODE=$(curl -sS -o /tmp/unknown-webhook.json -w "%{http_code}" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/webhooks/unknown" -d '{}')
+          test "$CODE" = "400"
+          CODE=$(curl -sS -o /tmp/papi-webhook.json -w "%{http_code}" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/webhooks/papi" -d '{}')
+          test "$CODE" = "403" -o "$CODE" = "503" -o "$CODE" = "502"
+          echo "Stages 139-141 passed"
+
+      - name: Stages 142-144 Builder review contract and final advanced regression
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          REVIEW=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head><body>OK</body></html>"},{"path":"app.js","content":"console.log(\"ok\");"},{"path":"styles.css","content":"body{margin:0;padding:0;}"}]}')
+          echo "$REVIEW" | grep -q '"success":true'
+          echo "$REVIEW" | grep -q '"passed":true'
+          BAD=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<body>broken</body>"},{"path":"app.js","content":"TODO placeholder"}]}')
+          echo "$BAD" | grep -q '"success":false'
+          echo "$BAD" | grep -q '"passed":false'
+          curl -fsS "$BASE/health" | grep -q '"status":"online"'
+          curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me" | grep -q '"active":true'
+          echo "ADVANCED SERVICES STAGES 127-144 PASSED"
