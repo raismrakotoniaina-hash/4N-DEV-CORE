@@ -1,0 +1,91 @@
+name: Builder Failure Recovery Atomicity Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  failure-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Builder failure recovery and atomicity boundaries
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          BASE="https://fourn-dev-core.onrender.com"
+          API="$BASE/v1"
+          AUTH=(-H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json")
+
+          echo "1. Read Builder credit policy"
+          POLICY=$(curl -fsS "$API/credit-policy")
+          BUILDER_COST=$(echo "$POLICY" | jq -r '.policy.builder.credits')
+          MAX_PROMPT=$(echo "$POLICY" | jq -r '.policy.builder.maxInputCharacters')
+          test "$BUILDER_COST" -gt 0
+          test "$MAX_PROMPT" -gt 0
+          echo "POLICY OK: cost=$BUILDER_COST max_prompt=$MAX_PROMPT"
+
+          echo "2. Capture balance before failure tests"
+          B0=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          echo "BALANCE BEFORE: $B0"
+
+          echo "3. Oversized prompt must fail before generation/persistence"
+          OVERSIZED=$(python - <<PY
+          print("x" * ($MAX_PROMPT + 1))
+          PY
+          )
+          PAYLOAD=$(jq -n --arg prompt "$OVERSIZED" '{prompt:$prompt,projectName:"SHOULD-NOT-BE-CREATED"}')
+          CODE=$(curl -sS -o /tmp/oversized.json -w "%{http_code}" "${AUTH[@]}" -X POST "$API/builder" -d "$PAYLOAD")
+          test "$CODE" = "413"
+          test "$(jq -r '.error' /tmp/oversized.json)" = "Builder prompt is too large"
+          test "$(jq -r '.max_characters' /tmp/oversized.json)" -eq "$MAX_PROMPT"
+          B1=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B1" -eq "$B0"
+          echo "OVERSIZED INPUT ATOMICITY OK"
+
+          echo "4. Invalid project must fail before generation/persistence"
+          CODE=$(curl -sS -o /tmp/invalid-project.json -w "%{http_code}" "${AUTH[@]}" -X POST "$API/builder" -d '{"prompt":"Recovery test","projectId":"00000000-0000-0000-0000-000000000000","projectName":"SHOULD-NOT-BE-CREATED"}')
+          test "$CODE" = "404"
+          test "$(jq -r '.error' /tmp/invalid-project.json)" = "Project not found"
+          B2=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B2" -eq "$B1"
+          echo "INVALID PROJECT ATOMICITY OK"
+
+          echo "5. Recover with a valid Builder request"
+          PROJECT_NAME="Stage24 Recovery $(date +%s)"
+          BUILD=$(jq -n --arg name "$PROJECT_NAME" '{prompt:"Create a small recovery test website",projectName:$name}')
+          RESULT=$(curl -fsS "${AUTH[@]}" -X POST "$API/builder" -d "$BUILD")
+          test "$(echo "$RESULT" | jq -r '.success')" = "true"
+          PROJECT_ID=$(echo "$RESULT" | jq -r '.project.id')
+          test -n "$PROJECT_ID"
+          test "$(echo "$RESULT" | jq -r '.credits_used')" -eq "$BUILDER_COST"
+          B3=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B3" -eq "$((B2 - BUILDER_COST))"
+          echo "RECOVERY BUILD OK: $B2 -> $B3"
+
+          echo "6. Reuse recovered project after previous failures"
+          UPDATE=$(curl -fsS "${AUTH[@]}" -X POST "$API/builder" -d "$(jq -n --arg id "$PROJECT_ID" '{prompt:"Update the recovered test website",projectId:$id}')")
+          test "$(echo "$UPDATE" | jq -r '.success')" = "true"
+          test "$(echo "$UPDATE" | jq -r '.project.id')" = "$PROJECT_ID"
+          test "$(echo "$UPDATE" | jq -r '.credits_used')" -eq "$BUILDER_COST"
+          B4=$(curl -fsS "${AUTH[@]}" "$API/credits" | jq -r '.credits')
+          test "$B4" -eq "$((B3 - BUILDER_COST))"
+          echo "RECOVERY REUSE OK: $B3 -> $B4"
+
+          echo "7. Verify recovered project remains readable"
+          READ=$(curl -fsS "${AUTH[@]}" "$API/projects/$PROJECT_ID")
+          test "$(echo "$READ" | jq -r '.success')" = "true"
+          test "$(echo "$READ" | jq -r '.project.id')" = "$PROJECT_ID"
+          FILES=$(curl -fsS "${AUTH[@]}" "$API/projects/$PROJECT_ID/files")
+          test "$(echo "$FILES" | jq -r '.success')" = "true"
+          test "$(echo "$FILES" | jq '.files | length')" -ge 1
+          echo "RECOVERED DATA INTEGRITY OK"
+
+          echo "8. Cleanup"
+          DELETE_CODE=$(curl -sS -o /tmp/delete.json -w "%{http_code}" "${AUTH[@]}" -X DELETE "$API/projects/$PROJECT_ID")
+          test "$DELETE_CODE" = "200"
+          VERIFY_CODE=$(curl -sS -o /tmp/verify.json -w "%{http_code}" "${AUTH[@]}" "$API/projects/$PROJECT_ID")
+          test "$VERIFY_CODE" = "404"
+          echo "CLEANUP OK"
+
+          echo "BUILDER FAILURE RECOVERY & ATOMICITY VALIDATION PASSED"
