@@ -36,7 +36,7 @@ jobs:
           BASE="$BASE_URL"
           KEY="$API_KEY"
           PID=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/projects" | python -c 'import json,sys; print([p["id"] for p in json.load(sys.stdin)["projects"] if p["name"]=="stage-109-persistence"][0])')
-          for path in "../blocked" "../../blocked" "/etc/passwd" "C:/blocked"; do
+          for path in "../blocked" "../../blocked" "/etc/passwd" "..\\blocked"; do
             CODE=$(curl -sS -o /tmp/bad-path.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects/$PID/files" -d "{\"path\":\"$path\",\"content\":\"blocked\"}")
             test "$CODE" = "400"
           done
