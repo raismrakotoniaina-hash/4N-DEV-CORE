@@ -55,6 +55,7 @@ jobs:
             if [ "$code" = "429" ]; then hit_429=1; break; fi
           done
           test "$hit_429" = "1"
+          sleep 61
           echo "STAGE 40 PASSED"
 
       - name: Stage 41 - Error Response Standardization
