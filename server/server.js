@@ -17,6 +17,8 @@ import projectsRouter from "./routes/projects.js";
 import filesRouter from "./routes/files.js";
 import builderRouter from "./routes/builder.js";
 import billingRouter from "./routes/billing.js";
+import usageRouter from "./routes/usage.js";
+import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
 
 const app = express();
@@ -98,6 +100,23 @@ app.post("/v1/keys", (req, res) => {
   });
 });
 
+app.get("/v1/keys", requireApiKey(), (req, res) => {
+  const keys = listApiKeys(req.apiKey.id).map(({ hash, ...safe }) => safe);
+  res.json({ success: true, keys });
+});
+
+app.patch("/v1/keys/:keyId", requireApiKey(), (req, res) => {
+  if (req.params.keyId !== req.apiKey.id) {
+    return res.status(403).json({ success: false, error: "Cannot modify another API key" });
+  }
+  if (typeof req.body?.active !== "boolean") {
+    return res.status(400).json({ success: false, error: "active must be a boolean" });
+  }
+  const updated = setApiKeyActive(req.apiKey.id, req.body.active);
+  if (!updated) return res.status(404).json({ success: false, error: "API key not found" });
+  res.json({ success: true, key: { id: updated.id, name: updated.name, planId: updated.planId, scopes: updated.scopes, active: updated.active, createdAt: updated.createdAt, updatedAt: updated.updatedAt } });
+});
+
 app.get("/v1/me", requireApiKey(), (req, res) => {
   const plan = getPlan(req.apiKey.planId || "free");
   res.json({
@@ -125,6 +144,7 @@ app.use("/v1", codingRouter);
 app.use("/v1", imageRouter);
 app.use("/v1", embeddingsRouter);
 app.use("/v1", creditsRouter);
+app.use("/v1", usageRouter);
 app.use("/v1", plansRouter);
 app.use("/v1", creditPolicyRouter);
 app.use("/v1/projects", projectsRouter);
