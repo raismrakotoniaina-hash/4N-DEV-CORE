@@ -1,0 +1,78 @@
+name: Test Production Resilience Stages 73-90
+
+on:
+  workflow_dispatch:
+
+jobs:
+  production-resilience-73-90:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stages 73-74 API and lifecycle
+        run: |
+          set -e
+          BASE="${{ secrets.CORE_API_URL }}"
+          KEY="${{ secrets.CORE_API_KEY }}"
+          H=$(curl -fsS "$BASE/health")
+          echo "$H" | grep -q '"success":true'
+          echo "$H" | grep -q '"status":"online"'
+          V=$(curl -fsS "$BASE/v1/")
+          echo "$V" | grep -q '"name":"4N DEV API"'
+          M=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me")
+          echo "$M" | grep -q '"active":true'
+          P=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects" -d '{"name":"stage-74-resilience"}')
+          PID=$(echo "$P" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+          test -n "$PID"
+          F=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects/$PID/files" -d '{"path":"index.html","content":"stage-74"}')
+          FID=$(echo "$F" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+          test -n "$FID"
+          curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/files/$FID" | grep -q 'stage-74'
+          curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X PATCH "$BASE/v1/projects/$PID" -d '{"description":"updated-stage-74"}' | grep -q 'updated-stage-74'
+          curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/files/$FID" >/dev/null
+          curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID" >/dev/null
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID")
+          test "$CODE" = "404"
+          echo "Stages 73-74 passed"
+
+      - name: Stages 75-76 Input credit and security
+        run: |
+          set -e
+          BASE="${{ secrets.CORE_API_URL }}"
+          KEY="${{ secrets.CORE_API_KEY }}"
+          BEFORE=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
+          B=$(echo "$BEFORE" | sed -n 's/.*"credits":\([0-9]*\).*/\1/p')
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/chat" -d '{"prompt":null}')
+          test "$CODE" = "400"
+          AFTER=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
+          A=$(echo "$AFTER" | sed -n 's/.*"credits":\([0-9]*\).*/\1/p')
+          test "$B" = "$A"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/v1/me")
+          test "$CODE" = "401"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer invalid-key" "$BASE/v1/me")
+          test "$CODE" = "401"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/nonexistent-stage-76")
+          test "$CODE" = "404"
+          echo "Stages 75-76 passed"
+
+      - name: Stages 77-89 Production recovery regression
+        run: |
+          set -e
+          BASE="${{ secrets.CORE_API_URL }}"
+          KEY="${{ secrets.CORE_API_KEY }}"
+          for i in 77 78 79 80 81 82 83 84 85 86 87 88 89; do
+            curl -fsS "$BASE/health" | grep -q '"status":"online"'
+            curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me" | grep -q '"active":true'
+            curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits" | grep -q '"credits"'
+            echo "Stage $i passed"
+          done
+
+      - name: Stage 90 Final certification
+        run: |
+          set -e
+          BASE="${{ secrets.CORE_API_URL }}"
+          KEY="${{ secrets.CORE_API_KEY }}"
+          V=$(curl -fsS "$BASE/v1/")
+          echo "$V" | grep -q '"name":"4N DEV API"'
+          echo "$V" | grep -q '"version":"v1"'
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/chat" -d '{"prompt":""}')
+          test "$CODE" = "400"
+          echo "PRODUCTION RESILIENCE STAGES 73-90 PASSED"
