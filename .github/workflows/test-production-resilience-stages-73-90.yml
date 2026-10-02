@@ -28,7 +28,7 @@ jobs:
           F=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects/$PID/files" -d '{"path":"index.html","content":"stage-74"}')
           FID=$(echo "$F" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
           test -n "$FID"
-          curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/files/$FID" | grep -q 'stage-74'
+          curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID" | grep -q 'stage-74'
           curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X PATCH "$BASE/v1/projects/$PID" -d '{"description":"updated-stage-74"}' | grep -q 'updated-stage-74'
           curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/files/$FID" >/dev/null
           curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID" >/dev/null
