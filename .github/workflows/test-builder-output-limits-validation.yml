@@ -1,0 +1,86 @@
+name: Builder Output Limits Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-builder-output-limits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Builder output limits
+        env:
+          CORE_API_URL: https://fourn-dev-core.onrender.com/v1
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+
+          API="$CORE_API_URL"
+
+          echo "=== CREDIT POLICY OUTPUT LIMITS ==="
+          POLICY="$(curl -fsS "$API/credit-policy")"
+          echo "$POLICY"
+
+          MAX_FILES="$(echo "$POLICY" | jq -r '.builder.maxFiles')"
+          MAX_TOTAL="$(echo "$POLICY" | jq -r '.builder.maxTotalCharacters')"
+
+          test "$MAX_FILES" = "40"
+          test "$MAX_TOTAL" = "4000000"
+          echo "OUTPUT LIMIT POLICY OK"
+
+          echo "=== BUILDER OUTPUT ==="
+          RESPONSE="$(curl -fsS -X POST "$API/builder" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "prompt":"Create a small responsive business website with a home page, services section and contact form.",
+              "projectName":"Stage 14 Output Limits Test"
+            }')"
+
+          echo "$RESPONSE"
+
+          echo "$RESPONSE" | jq -e '.success == true' >/dev/null
+          echo "$RESPONSE" | jq -e '.files | type == "array"' >/dev/null
+          echo "$RESPONSE" | jq -e '.files | length > 0 and length <= 40' >/dev/null
+
+          FILE_COUNT="$(echo "$RESPONSE" | jq '.files | length')"
+          TOTAL_CHARS="$(echo "$RESPONSE" | jq '[.files[].content | length] | add')"
+
+          test "$FILE_COUNT" -le 40
+          test "$TOTAL_CHARS" -le 4000000
+
+          echo "FILES GENERATED: $FILE_COUNT"
+          echo "TOTAL OUTPUT CHARACTERS: $TOTAL_CHARS"
+          echo "BUILDER OUTPUT SIZE WITHIN LIMITS OK"
+
+          echo "=== OUTPUT PATH SAFETY ==="
+          echo "$RESPONSE" | jq -e '
+            .files
+            | all(
+                .path
+                | type == "string"
+                and (length > 0)
+                and (length <= 300)
+                and (startswith("/") | not)
+                and (contains("..") | not)
+                and (contains("\u0000") | not)
+              )
+          ' >/dev/null
+          echo "OUTPUT PATHS SAFE OK"
+
+          echo "=== REQUIRED ENTRY POINT ==="
+          echo "$RESPONSE" | jq -e '.files | any(.path == "index.html")' >/dev/null
+          echo "INDEX HTML PRESENT OK"
+
+          echo "=== QUALITY REVIEW ==="
+          echo "$RESPONSE" | jq -e '.review.passed == true' >/dev/null
+          echo "OUTPUT REVIEW PASSED OK"
+
+          echo "BUILDER OUTPUT LIMITS VALIDATION PASSED"
+
+          PROJECT_ID="$(echo "$RESPONSE" | jq -r '.project.id')"
+          if [ -n "$PROJECT_ID" ] && [ "$PROJECT_ID" != "null" ]; then
+            echo "=== CLEANUP ==="
+            curl -fsS -X DELETE "$API/projects/$PROJECT_ID" \
+              -H "Authorization: Bearer $CORE_API_KEY" >/dev/null
+            echo "TEST PROJECT CLEANED"
+          fi
