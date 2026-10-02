@@ -1,0 +1,64 @@
+name: Builder Authentication Authorization Boundary Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate authentication and authorization boundaries
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          API="https://fourn-dev-core.onrender.com/v1"
+
+          echo "1. Missing API key must return 401"
+          CODE=$(curl -sS -o /tmp/missing.json -w "%{http_code}"             "$API/builder")
+          test "$CODE" = "401"
+          jq -e '.success == false and .error == "Missing 4N DEV API key"' /tmp/missing.json >/dev/null
+          echo "MISSING KEY 401 OK"
+
+          echo "2. Invalid API key must return 401"
+          CODE=$(curl -sS -o /tmp/invalid.json -w "%{http_code}"             "$API/builder" -H "Authorization: Bearer 4ndev_sk_live_invalid_stage19")
+          test "$CODE" = "401"
+          jq -e '.success == false and .error == "Invalid or revoked 4N DEV API key"' /tmp/invalid.json >/dev/null
+          echo "INVALID KEY 401 OK"
+
+          echo "3. Wrong authentication scheme must return 401"
+          CODE=$(curl -sS -o /tmp/scheme.json -w "%{http_code}"             "$API/builder" -H "Authorization: Basic $CORE_API_KEY")
+          test "$CODE" = "401"
+          jq -e '.success == false and .error == "Missing 4N DEV API key"' /tmp/scheme.json >/dev/null
+          echo "AUTH SCHEME 401 OK"
+
+          echo "4. Valid API key must authenticate"
+          CODE=$(curl -sS -o /tmp/valid.json -w "%{http_code}"             "$API/credits" -H "Authorization: Bearer $CORE_API_KEY")
+          test "$CODE" = "200"
+          jq -e '.success == true and (.credits | type) == "number"' /tmp/valid.json >/dev/null
+          echo "VALID KEY AUTHENTICATION OK"
+
+          echo "5. Public credit policy must remain accessible without an API key"
+          CODE=$(curl -sS -o /tmp/policy.json -w "%{http_code}"             "$API/credit-policy")
+          test "$CODE" = "200"
+          jq -e '.policy.builder and .policy.planner' /tmp/policy.json >/dev/null
+          echo "PUBLIC POLICY BOUNDARY OK"
+
+          echo "6. Protected project endpoint must reject unauthenticated access"
+          CODE=$(curl -sS -o /tmp/projects.json -w "%{http_code}"             "$API/projects")
+          test "$CODE" = "401"
+          echo "PROJECT AUTH BOUNDARY OK"
+
+          echo "7. Valid key cannot access a non-existent project"
+          CODE=$(curl -sS -o /tmp/notfound.json -w "%{http_code}"             "$API/projects/00000000-0000-0000-0000-000000000000"             -H "Authorization: Bearer $CORE_API_KEY")
+          test "$CODE" = "404"
+          jq -e '.success == false and .error == "Project not found"' /tmp/notfound.json >/dev/null
+          echo "PROJECT OWNERSHIP LOOKUP BOUNDARY OK"
+
+          echo "8. Protected files endpoint must reject unauthenticated access"
+          CODE=$(curl -sS -o /tmp/files.json -w "%{http_code}"             "$API/projects/00000000-0000-0000-0000-000000000000/files")
+          test "$CODE" = "401"
+          echo "FILES AUTH BOUNDARY OK"
+
+          echo "BUILDER AUTHENTICATION & AUTHORIZATION BOUNDARY VALIDATION PASSED"
