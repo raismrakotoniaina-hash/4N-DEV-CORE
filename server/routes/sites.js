@@ -1,0 +1,48 @@
+import express from "express";
+import { getPublicDeployment, findDeploymentFile } from "../hosting.js";
+
+const router = express.Router();
+
+const contentTypes = {
+  html: "text/html; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
+  json: "application/json; charset=utf-8",
+  svg: "image/svg+xml",
+  txt: "text/plain; charset=utf-8",
+  xml: "application/xml; charset=utf-8",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  ico: "image/x-icon"
+};
+
+router.use("/:slug", (req, res) => {
+  const deployment = getPublicDeployment(req.params.slug);
+  if (!deployment) {
+    return res.status(404).json({
+      success: false,
+      error: "Published site not found"
+    });
+  }
+
+  const requestedPath = req.path.replace(/^\/+/, "");
+  const file = findDeploymentFile(deployment, requestedPath);
+
+  if (!file) {
+    return res.status(404).json({
+      success: false,
+      error: "Published file not found"
+    });
+  }
+
+  const extension = file.path.includes(".")
+    ? file.path.split(".").pop().toLowerCase()
+    : "";
+
+  res.type(contentTypes[extension] || "application/octet-stream");
+  res.send(file.content);
+});
+
+export default router;
