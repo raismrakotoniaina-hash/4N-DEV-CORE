@@ -17,6 +17,7 @@ import projectsRouter from "./routes/projects.js";
 import filesRouter from "./routes/files.js";
 import builderRouter from "./routes/builder.js";
 import billingRouter from "./routes/billing.js";
+import { apiRateLimit } from "./middleware/rateLimit.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -118,6 +119,7 @@ app.get("/v1/me", requireApiKey(), (req, res) => {
 // Otherwise a generic API-key middleware can intercept the public PAPI webhook.
 app.use("/v1/billing", billingRouter);
 
+app.use("/v1", apiRateLimit);
 app.use("/v1", chatRouter);
 app.use("/v1", codingRouter);
 app.use("/v1", imageRouter);
