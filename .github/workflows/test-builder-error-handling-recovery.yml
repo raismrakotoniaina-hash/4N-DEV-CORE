@@ -1,0 +1,66 @@
+name: Builder Error Handling Recovery
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-builder-errors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Builder error handling and recovery
+        env:
+          CORE_API_URL: https://fourn-dev-core.onrender.com/v1
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -e
+
+          API="$CORE_API_URL"
+
+          echo "=== MISSING API KEY ==="
+          HTTP="$(curl -sS -o /tmp/no-key.json -w "%{http_code}" -X POST "$API/builder"             -H "Content-Type: application/json"             -d '{"prompt":"test"}')"
+          cat /tmp/no-key.json
+          test "$HTTP" = "401"
+          jq -e '.success == false and .error == "Missing 4N DEV API key"' /tmp/no-key.json >/dev/null
+          echo "MISSING API KEY HANDLED OK"
+
+          echo "=== INVALID API KEY ==="
+          HTTP="$(curl -sS -o /tmp/bad-key.json -w "%{http_code}" -X POST "$API/builder"             -H "Authorization: Bearer invalid-stage-15-key"             -H "Content-Type: application/json"             -d '{"prompt":"test"}')"
+          cat /tmp/bad-key.json
+          test "$HTTP" = "401"
+          jq -e '.success == false and .error == "Invalid or revoked 4N DEV API key"' /tmp/bad-key.json >/dev/null
+          echo "INVALID API KEY HANDLED OK"
+
+          echo "=== INVALID PROJECT ID ==="
+          HTTP="$(curl -sS -o /tmp/bad-project.json -w "%{http_code}" -X POST "$API/builder"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"prompt":"Create a simple website","projectId":"00000000-0000-0000-0000-000000000000"}')"
+          cat /tmp/bad-project.json
+          test "$HTTP" = "404"
+          jq -e '.success == false and .error == "Project not found"' /tmp/bad-project.json >/dev/null
+          echo "INVALID PROJECT HANDLED OK"
+
+          echo "=== EMPTY REVIEW INPUT ==="
+          HTTP="$(curl -sS -o /tmp/empty-review.json -w "%{http_code}" -X POST "$API/builder/review"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"files":[]}')"
+          cat /tmp/empty-review.json
+          test "$HTTP" = "400"
+          jq -e '.success == false and .error == "files are required"' /tmp/empty-review.json >/dev/null
+          echo "EMPTY REVIEW HANDLED OK"
+
+          echo "=== RECOVERY AFTER ERRORS ==="
+          RESPONSE="$(curl -fsS -X POST "$API/builder"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{
+              "prompt":"Create a small responsive website with a home page and contact section.",
+              "projectName":"Stage 15 Error Recovery Test"
+            }')"
+          echo "$RESPONSE"
+
+          echo "$RESPONSE" | jq -e '.success == true' >/dev/null
+          echo "$RESPONSE" | jq -e '.project.id | type == "string" and length > 0' >/dev/null
+          echo "$RESPONSE" | jq -e '.files | length > 0' >/dev/null
+          echo "$RESPONSE" | jq -e '.review.passed == true' >/dev/null
+          echo "RECOVERY REQUEST SUCCEEDED"
+
+          PROJECT_ID="$(echo "$RESPONSE" | jq -r '.project.id')"
+
+          echo "=== CLEANUP ==="
+          curl -fsS -X DELETE "$API/projects/$PROJECT_ID"             -H "Authorization: Bearer $CORE_API_KEY" >/dev/null
+          echo "TEST PROJECT CLEANED"
+
+          echo "BUILDER ERROR HANDLING & RECOVERY PASSED"
