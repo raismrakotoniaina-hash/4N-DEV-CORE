@@ -22,17 +22,34 @@ jobs:
           echo "$V" | grep -q '"name":"4N DEV API"'
           M=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me")
           echo "$M" | grep -q '"active":true'
+
           P=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects" -d '{"name":"stage-74-resilience"}')
-          PID=$(echo "$P" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+          PID=$(echo "$P" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
           test -n "$PID"
+
           F=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects/$PID/files" -d '{"path":"index.html","content":"stage-74"}')
-          FID=$(echo "$F" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+          FID=$(echo "$F" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
           test -n "$FID"
-          curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID" | grep -q 'stage-74'
-          curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X PATCH "$BASE/v1/projects/$PID" -d '{"description":"updated-stage-74"}' | grep -q 'updated-stage-74'
-          curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID/files/$FID" >/dev/null
-          curl -fsS -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID" >/dev/null
-          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID")
+
+          GET_CODE=$(curl -sS -o /tmp/file-get.json -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID")
+          echo "File GET HTTP: $GET_CODE"
+          test "$GET_CODE" = "200"
+          grep -q 'stage-74' /tmp/file-get.json
+
+          PATCH_CODE=$(curl -sS -o /tmp/project-patch.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X PATCH "$BASE/v1/projects/$PID" -d '{"description":"updated-stage-74"}')
+          echo "Project PATCH HTTP: $PATCH_CODE"
+          test "$PATCH_CODE" = "200"
+          grep -q 'updated-stage-74' /tmp/project-patch.json
+
+          DEL_FILE_CODE=$(curl -sS -o /tmp/file-delete.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID/files/$FID")
+          echo "File DELETE HTTP: $DEL_FILE_CODE"
+          test "$DEL_FILE_CODE" = "200"
+
+          DEL_PROJECT_CODE=$(curl -sS -o /tmp/project-delete.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID")
+          echo "Project DELETE HTTP: $DEL_PROJECT_CODE"
+          test "$DEL_PROJECT_CODE" = "200"
+
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID")
           test "$CODE" = "404"
           echo "Stages 73-74 passed"
 
@@ -42,11 +59,11 @@ jobs:
           BASE="$BASE_URL"
           KEY="$API_KEY"
           BEFORE=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
-          B=$(echo "$BEFORE" | sed -n 's/.*"credits":\([0-9]*\).*/\1/p')
+          B=$(echo "$BEFORE" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
           CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/chat" -d '{"prompt":null}')
           test "$CODE" = "400"
           AFTER=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
-          A=$(echo "$AFTER" | sed -n 's/.*"credits":\([0-9]*\).*/\1/p')
+          A=$(echo "$AFTER" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
           test "$B" = "$A"
           CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/v1/me")
           test "$CODE" = "401"
