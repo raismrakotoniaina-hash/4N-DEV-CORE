@@ -89,12 +89,17 @@ jobs:
           set -e
           BASE="$BASE_URL"
           KEY="$API_KEY"
-          REVIEW=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head><body>OK</body></html>"},{"path":"app.js","content":"console.log(\"ok\");"},{"path":"styles.css","content":"body{margin:0;padding:0;}"}]}')
-          echo "$REVIEW" | grep -q '"success":true'
-          echo "$REVIEW" | grep -q '"passed":true'
-          BAD=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<body>broken</body>"},{"path":"app.js","content":"TODO placeholder"}]}')
-          echo "$BAD" | grep -q '"success":false'
-          echo "$BAD" | grep -q '"passed":false'
-          curl -fsS "$BASE/health" | grep -q '"status":"online"'
-          curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me" | grep -q '"active":true'
+
+          REVIEW=$(curl -sS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>OK</body></html>"},{"path":"app.js","content":"console.log("ok");"},{"path":"styles.css","content":"body{margin:0;padding:0;}"}]}')
+          echo "Builder valid review: $REVIEW"
+          python -c 'import json,sys; r=json.loads(sys.argv[1]); assert r.get("success") is True, r; assert r.get("review",{}).get("passed") is True, r' "$REVIEW"
+
+          BAD=$(curl -sS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<body>broken</body>"},{"path":"app.js","content":"TODO placeholder"}]}')
+          echo "Builder invalid review: $BAD"
+          python -c 'import json,sys; r=json.loads(sys.argv[1]); assert r.get("success") is False, r; assert r.get("review",{}).get("passed") is False, r' "$BAD"
+
+          HEALTH=$(curl -fsS "$BASE/health")
+          echo "$HEALTH" | grep -q '"status":"online"'
+          ME=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me")
+          echo "$ME" | grep -q '"active":true'
           echo "ADVANCED SERVICES STAGES 127-144 PASSED"
