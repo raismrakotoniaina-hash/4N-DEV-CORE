@@ -1,0 +1,91 @@
+name: Builder Data Integrity Persistence Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Builder -> Project -> Files persistence
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          API="https://fourn-dev-core.onrender.com/v1"
+          HEADERS=(-H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json")
+          PROJECT_ID=""
+
+          cleanup() {
+            if [ -n "$PROJECT_ID" ]; then
+              curl -sS -X DELETE "$API/projects/$PROJECT_ID" "${HEADERS[@]}" >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          echo "1. Create project through Builder"
+          CREATE=$(curl -sS -w "\n%{http_code}" -X POST "$API/builder" "${HEADERS[@]}"             -d '{"prompt":"Create a small business website with a home page, services section and contact section","projectName":"Stage 16 Integrity Test"}')
+          CREATE_BODY=$(echo "$CREATE" | sed '$d')
+          CREATE_CODE=$(echo "$CREATE" | tail -n1)
+          test "$CREATE_CODE" = "200"
+          echo "$CREATE_BODY" | jq -e '.success == true' >/dev/null
+          PROJECT_ID=$(echo "$CREATE_BODY" | jq -r '.project.id')
+          test -n "$PROJECT_ID" && test "$PROJECT_ID" != "null"
+          echo "CREATE OK: $PROJECT_ID"
+
+          echo "2. Verify project persistence"
+          PROJECT=$(curl -sS "$API/projects/$PROJECT_ID" "${HEADERS[@]}")
+          echo "$PROJECT" | jq -e --arg id "$PROJECT_ID" '.success == true and .project.id == $id' >/dev/null
+          echo "PROJECT PERSISTENCE OK"
+
+          echo "3. Verify generated files persistence"
+          FILES=$(curl -sS "$API/projects/$PROJECT_ID/files" "${HEADERS[@]}")
+          echo "$FILES" | jq -e '.success == true and (.files | length) == 3' >/dev/null
+          echo "$FILES" | jq -e '([.files[].path] | sort) == ["app.js","index.html","styles.css"]' >/dev/null
+          echo "$FILES" | jq -e '([.files[].path] | unique | length) == 3' >/dev/null
+          echo "FILES PERSISTENCE OK"
+
+          echo "4. Verify every persisted file belongs to the project"
+          for FILE_ID in $(echo "$FILES" | jq -r '.files[].id'); do
+            FILE=$(curl -sS "$API/projects/$PROJECT_ID/files/$FILE_ID" "${HEADERS[@]}")
+            echo "$FILE" | jq -e --arg pid "$PROJECT_ID" '.success == true and .file.projectId == $pid' >/dev/null
+          done
+          echo "FILE-PROJECT INTEGRITY OK"
+
+          echo "5. Reuse the same project through Builder"
+          UPDATE=$(curl -sS -w "\n%{http_code}" -X POST "$API/builder" "${HEADERS[@]}"             -d "{\"prompt\":\"Update the same business project with a more detailed contact section\",\"projectId\":\"$PROJECT_ID\"}")
+          UPDATE_BODY=$(echo "$UPDATE" | sed '$d')
+          UPDATE_CODE=$(echo "$UPDATE" | tail -n1)
+          test "$UPDATE_CODE" = "200"
+          echo "$UPDATE_BODY" | jq -e --arg id "$PROJECT_ID" '.success == true and .project.id == $id' >/dev/null
+          echo "PROJECT REUSE OK"
+
+          echo "6. Verify data integrity after Builder update"
+          FILES_AFTER=$(curl -sS "$API/projects/$PROJECT_ID/files" "${HEADERS[@]}")
+          echo "$FILES_AFTER" | jq -e '.success == true and (.files | length) == 3' >/dev/null
+          echo "$FILES_AFTER" | jq -e '([.files[].path] | sort) == ["app.js","index.html","styles.css"]' >/dev/null
+          echo "$FILES_AFTER" | jq -e '([.files[].path] | unique | length) == 3' >/dev/null
+          for FILE_ID in $(echo "$FILES_AFTER" | jq -r '.files[].id'); do
+            FILE=$(curl -sS "$API/projects/$PROJECT_ID/files/$FILE_ID" "${HEADERS[@]}")
+            echo "$FILE" | jq -e --arg pid "$PROJECT_ID" '.success == true and .file.projectId == $pid and (.file.content | type) == "string"' >/dev/null
+          done
+          echo "UPDATED DATA INTEGRITY OK"
+
+          echo "7. Delete project and verify project + files are no longer readable"
+          DELETE=$(curl -sS -w "\n%{http_code}" -X DELETE "$API/projects/$PROJECT_ID" "${HEADERS[@]}")
+          DELETE_CODE=$(echo "$DELETE" | tail -n1)
+          test "$DELETE_CODE" = "200"
+          echo "PROJECT DELETE OK"
+
+          PROJECT_AFTER=$(curl -sS -w "\n%{http_code}" "$API/projects/$PROJECT_ID" "${HEADERS[@]}")
+          PROJECT_AFTER_CODE=$(echo "$PROJECT_AFTER" | tail -n1)
+          test "$PROJECT_AFTER_CODE" = "404"
+
+          FILES_AFTER_DELETE=$(curl -sS -w "\n%{http_code}" "$API/projects/$PROJECT_ID/files" "${HEADERS[@]}")
+          FILES_AFTER_DELETE_CODE=$(echo "$FILES_AFTER_DELETE" | tail -n1)
+          test "$FILES_AFTER_DELETE_CODE" = "404"
+          PROJECT_ID=""
+          echo "DELETION INTEGRITY OK"
+
+          echo "BUILDER DATA INTEGRITY & PERSISTENCE PASSED"
