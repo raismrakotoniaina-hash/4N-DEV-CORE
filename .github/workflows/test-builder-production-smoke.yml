@@ -1,0 +1,115 @@
+name: Builder Production E2E Smoke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run deployed Builder production smoke test
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          API="https://fourn-dev-core.onrender.com/v1"
+          AUTH="Authorization: Bearer $CORE_API_KEY"
+          CONTENT="Content-Type: application/json"
+          PROJECT_ID=""
+
+          cleanup() {
+            if [ -n "$PROJECT_ID" ]; then
+              curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH" >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          echo "1. Production API health"
+          HEALTH=$(curl -sS "$API/health")
+          echo "$HEALTH" | jq -e '.status == "ok" or .success == true' >/dev/null
+          echo "PRODUCTION HEALTH OK"
+
+          echo "2. Authentication"
+          CODE=$(curl -sS -o /tmp/auth.json -w "%{http_code}" "$API/credits" -H "$AUTH")
+          test "$CODE" = "200"
+          jq -e '.success == true and (.credits | type) == "number"' /tmp/auth.json >/dev/null
+          echo "AUTHENTICATION OK"
+
+          echo "3. Planner"
+          PLAN_BODY=$(jq -n '{prompt:"Create a small business dashboard with customers and invoices"}')
+          PLAN=$(curl -sS -X POST "$API/builder/plan" -H "$AUTH" -H "$CONTENT" -d "$PLAN_BODY")
+          echo "$PLAN" | jq -e '
+            .success == true and
+            (.plan.project_type | type) == "string" and
+            (.plan.pages | type) == "array" and
+            (.plan.files | type) == "array"
+          ' >/dev/null
+          echo "PLANNER OK"
+
+          echo "4. Builder generation"
+          BUILD_BODY=$(jq -n '{prompt:"Create a production-ready small business dashboard with customers, invoices and settings",projectName:"Stage 20 Production Smoke"}')
+          BUILD=$(curl -sS -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d "$BUILD_BODY")
+          echo "$BUILD" | jq -e '
+            .success == true and
+            (.project.id | type) == "string" and
+            (.files | length) > 0 and
+            (.review.passed | type) == "boolean"
+          ' >/dev/null
+          PROJECT_ID=$(echo "$BUILD" | jq -r '.project.id')
+          test -n "$PROJECT_ID" && test "$PROJECT_ID" != "null"
+          echo "BUILDER OK: $PROJECT_ID"
+
+          echo "5. Project persistence"
+          PROJECT=$(curl -sS "$API/projects/$PROJECT_ID" -H "$AUTH")
+          echo "$PROJECT" | jq -e --arg id "$PROJECT_ID" '.success == true and .project.id == $id' >/dev/null
+          echo "PROJECT PERSISTENCE OK"
+
+          echo "6. Files persistence"
+          FILES=$(curl -sS "$API/projects/$PROJECT_ID/files" -H "$AUTH")
+          echo "$FILES" | jq -e '
+            .success == true and
+            (.files | length) > 0 and
+            all(.files[]; (.projectId | type) == "string" and (.path | type) == "string" and (.content | type) == "string")
+          ' >/dev/null
+          echo "$FILES" | jq -e --arg id "$PROJECT_ID" 'all(.files[]; .projectId == $id)' >/dev/null
+          echo "FILES PERSISTENCE OK"
+
+          echo "7. Review persisted files"
+          REVIEW_BODY=$(jq -n --argjson files "$(echo "$FILES" | jq '.files | map({path:.path,content:.content})')" '{files:$files}')
+          REVIEW=$(curl -sS -X POST "$API/builder/review" -H "$AUTH" -H "$CONTENT" -d "$REVIEW_BODY")
+          echo "$REVIEW" | jq -e '
+            (.success | type) == "boolean" and
+            (.review.passed | type) == "boolean" and
+            (.review.files_checked | type) == "number"
+          ' >/dev/null
+          echo "PERSISTED FILE REVIEW OK"
+
+          echo "8. Builder update same project"
+          UPDATE_BODY=$(jq -n --arg id "$PROJECT_ID" '{prompt:"Update the dashboard with an improved settings section",projectId:$id}')
+          UPDATE=$(curl -sS -X POST "$API/builder" -H "$AUTH" -H "$CONTENT" -d "$UPDATE_BODY")
+          echo "$UPDATE" | jq -e --arg id "$PROJECT_ID" '.success == true and .project.id == $id and (.files | length) > 0' >/dev/null
+          echo "BUILDER UPDATE OK"
+
+          echo "9. Verify updated project files"
+          FILES_AFTER=$(curl -sS "$API/projects/$PROJECT_ID/files" -H "$AUTH")
+          echo "$FILES_AFTER" | jq -e --arg id "$PROJECT_ID" '
+            .success == true and
+            (.files | length) > 0 and
+            all(.files[]; .projectId == $id and (.content | type) == "string")
+          ' >/dev/null
+          echo "UPDATED FILES OK"
+
+          echo "10. Final security smoke check"
+          CODE=$(curl -sS -o /tmp/noauth.json -w "%{http_code}" "$API/projects/$PROJECT_ID")
+          test "$CODE" = "401"
+          echo "SECURITY SMOKE OK"
+
+          echo "11. Delete and verify cleanup"
+          DELETE=$(curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH")
+          echo "$DELETE" | jq -e '.success == true and .deleted == true' >/dev/null
+          test "$(curl -sS -o /tmp/deleted.json -w "%{http_code}" "$API/projects/$PROJECT_ID" -H "$AUTH")" = "404"
+          PROJECT_ID=""
+          echo "CLEANUP OK"
+
+          echo "BUILDER PRODUCTION E2E SMOKE TEST PASSED"
