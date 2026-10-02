@@ -1,0 +1,105 @@
+name: Production Developer Platform Stages 49-54
+
+on:
+  workflow_dispatch:
+
+jobs:
+  certification:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Stage 49 - API Key Lifecycle Security
+        run: |
+          set -e
+          code=$(curl -sS -o /tmp/revoke.json -w "%{http_code}" -X DELETE "$BASE_URL/v1/keys/nonexistent-key"             -H "x-core-admin-secret: invalid-secret")
+          test "$code" = "403" || test "$code" = "503"
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+          echo "STAGE 49 PASSED"
+
+      - name: Stage 50 - Developer Project Isolation
+        run: |
+          set -e
+          project=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"ci-isolation-check","description":"temporary certification project"}')
+          project_id=$(echo "$project" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+          test -n "$project_id"
+
+          own=$(curl -fsS "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY")
+          echo "$own" | grep -q '"success":true'
+
+          code=$(curl -sS -o /tmp/foreign-project.json -w "%{http_code}"             "$BASE_URL/v1/projects/00000000-0000-0000-0000-000000000000"             -H "Authorization: Bearer $API_KEY")
+          test "$code" = "404"
+
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          echo "STAGE 50 PASSED"
+
+      - name: Stage 51 - File Isolation and Path Security
+        run: |
+          set -e
+          project=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"ci-file-security-check"}')
+          project_id=$(echo "$project" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+
+          code=$(curl -sS -o /tmp/bad-file.json -w "%{http_code}"             -X POST "$BASE_URL/v1/projects/$project_id/files"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"path":"../../secret.txt","content":"x"}')
+          test "$code" = "400"
+
+          file=$(curl -fsS -X POST "$BASE_URL/v1/projects/$project_id/files"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"path":"src/index.js","content":"export default 1;"}')
+          file_id=$(echo "$file" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
+          test -n "$file_id"
+
+          got=$(curl -fsS "$BASE_URL/v1/projects/$project_id/files/$file_id"             -H "Authorization: Bearer $API_KEY")
+          echo "$got" | grep -q '"success":true'
+
+          code=$(curl -sS -o /tmp/foreign-file.json -w "%{http_code}"             "$BASE_URL/v1/projects/$project_id/files/00000000-0000-0000-0000-000000000000"             -H "Authorization: Bearer $API_KEY")
+          test "$code" = "404"
+
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          echo "STAGE 51 PASSED"
+
+      - name: Stage 52 - Usage and Credit Accounting
+        run: |
+          set -e
+          before=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          before_credits=$(echo "$before" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+
+          code=$(curl -sS -o /tmp/invalid-chat.json -w "%{http_code}"             -X POST "$BASE_URL/v1/chat"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"input":null}')
+          test "$code" = "400"
+
+          after=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          after_credits=$(echo "$after" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          test "$before_credits" = "$after_credits"
+          echo "STAGE 52 PASSED"
+
+      - name: Stage 53 - Production Recovery
+        run: |
+          set -e
+          for i in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}"               "$BASE_URL/v1/me" -H "Authorization: Bearer invalid-recovery-key-$i")
+            test "$code" = "401"
+          done
+          sleep 2
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"status":"online"'
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+          echo "STAGE 53 PASSED"
+
+      - name: Stage 54 - Final End-to-End Certification
+        run: |
+          set -e
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"name":"4N DEV Core API"'
+          echo "$health" | grep -q '"status":"online"'
+
+          root=$(curl -fsS "$BASE_URL/v1/")
+          echo "$root" | grep -q '"success":true'
+
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+
+          credits=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          echo "$credits" | grep -q '"credits"'
+
+          echo "PRODUCTION DEVELOPER PLATFORM STAGES 49-54 PASSED"
