@@ -13,7 +13,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          API="https://fourn-dev-core.onrender.com/v1"
+          BASE="https://fourn-dev-core.onrender.com"
+          API="$BASE/v1"
           AUTH="Authorization: Bearer $CORE_API_KEY"
           CONTENT="Content-Type: application/json"
           PROJECT_ID=""
@@ -26,8 +27,9 @@ jobs:
           trap cleanup EXIT
 
           echo "1. Production API health"
-          HEALTH=$(curl -sS "$API/health")
-          echo "$HEALTH" | jq -e '.status == "ok" or .success == true' >/dev/null
+          HEALTH=$(curl -sS "$BASE/health")
+          echo "$HEALTH"
+          echo "$HEALTH" | jq -e '.status == "online" and .success == true' >/dev/null
           echo "PRODUCTION HEALTH OK"
 
           echo "2. Authentication"
