@@ -27,8 +27,9 @@ jobs:
           assert get("/v1/me")== "401"
           assert get("/v1/me","invalid-key")== "401"
           code=get("/v1/me",key); assert code=="200"
-          d=json.load(open("/tmp/r")); assert d["success"] is True and d["active"] is True
-          assert "plan" in d and "features" in d and "scopes" in d and "credits" in d
+          d=json.load(open("/tmp/r")); assert d["success"] is True
+          dev=d["developer"]; assert dev["active"] is True
+          assert "plan" in dev and "features" in dev and "scopes" in dev and "credits" in dev
           code=get("/v1/credits",key); assert code=="200"
           d=json.load(open("/tmp/r")); assert d["success"] is True and "credits" in d
           print("177-180 PASS")
