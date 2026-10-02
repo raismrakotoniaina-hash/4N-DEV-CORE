@@ -24,26 +24,26 @@ jobs:
           auth=(-H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json")
 
           echo "209-212: project persistence"
-          PJSON=$(curl -fsS "${auth[@]}" -X POST "$BASE_URL/v1/projects"             -d '{"name":"stage209-project","description":"initial-state"}')
+          PJSON=$(curl -fsS "${auth[@]}" -X POST "$BASE_URL/v1/projects" -d '{"name":"stage209-project","description":"initial-state"}')
           PID=$(python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])' <<<"$PJSON")
 
           curl -fsS "${auth[@]}" "$BASE_URL/v1/projects/$PID" > /tmp/project1.json
           python -c 'import json; d=json.load(open("/tmp/project1.json")); p=d.get("project",d); assert p["id"]=="'$PID'"; assert p["name"]=="stage209-project"; assert p["description"]=="initial-state"'
 
-          curl -fsS "${auth[@]}" -X PATCH "$BASE_URL/v1/projects/$PID"             -d '{"description":"persisted-update"}' > /tmp/project2.json
+          curl -fsS "${auth[@]}" -X PATCH "$BASE_URL/v1/projects/$PID" -d '{"description":"persisted-update"}' > /tmp/project2.json
           python -c 'import json; d=json.load(open("/tmp/project2.json")); p=d.get("project",d); assert p["description"]=="persisted-update"'
 
           curl -fsS "${auth[@]}" "$BASE_URL/v1/projects/$PID" > /tmp/project3.json
           python -c 'import json; d=json.load(open("/tmp/project3.json")); p=d.get("project",d); assert p["description"]=="persisted-update"'
 
           echo "213-216: file state consistency"
-          FJSON=$(curl -fsS "${auth[@]}" -X POST "$BASE_URL/v1/projects/$PID/files"             -d '{"path":"index.html","content":"<html>stage213</html>"}')
+          FJSON=$(curl -fsS "${auth[@]}" -X POST "$BASE_URL/v1/projects/$PID/files" -d '{"path":"index.html","content":"<html>stage213</html>"}')
           FID=$(python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])' <<<"$FJSON")
 
           curl -fsS "${auth[@]}" "$BASE_URL/v1/projects/$PID/files/$FID" > /tmp/file1.json
           python -c 'import json; d=json.load(open("/tmp/file1.json")); f=d.get("file",d); assert f["id"]=="'$FID'"; assert f["path"]=="index.html"; assert f["content"]=="<html>stage213</html>"'
 
-          curl -fsS "${auth[@]}" -X PUT "$BASE_URL/v1/projects/$PID/files/$FID"             -d '{"path":"index.html","content":"<html>stage213-updated</html>"}' > /tmp/file2.json
+          curl -fsS "${auth[@]}" -X PUT "$BASE_URL/v1/projects/$PID/files/$FID" -d '{"path":"index.html","content":"<html>stage213-updated</html>"}' > /tmp/file2.json
           python -c 'import json; d=json.load(open("/tmp/file2.json")); f=d.get("file",d); assert f["content"]=="<html>stage213-updated</html>"'
 
           curl -fsS "${auth[@]}" "$BASE_URL/v1/projects/$PID/files/$FID" > /tmp/file3.json
