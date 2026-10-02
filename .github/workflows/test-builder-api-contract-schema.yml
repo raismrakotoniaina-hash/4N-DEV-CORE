@@ -1,0 +1,146 @@
+name: Builder API Contract Schema Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Builder API response contracts
+        env:
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          API="https://fourn-dev-core.onrender.com/v1"
+          AUTH="Authorization: Bearer $CORE_API_KEY"
+          CONTENT="Content-Type: application/json"
+          PROJECT_ID=""
+          FILE_ID=""
+
+          cleanup() {
+            if [ -n "$PROJECT_ID" ]; then
+              curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH" >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          echo "1. Validate credit policy contract"
+          POLICY=$(curl -sS "$API/credit-policy")
+          echo "$POLICY" | jq -e '
+            .policy.builder.credits == 10 and
+            .policy.builder.maxInputCharacters == 24000 and
+            .policy.builder.maxFiles == 40 and
+            .policy.builder.maxTotalCharacters == 4000000 and
+            .policy.planner.credits == 2 and
+            .policy.planner.maxInputCharacters == 12000
+          ' >/dev/null
+          echo "CREDIT POLICY CONTRACT OK"
+
+          echo "2. Validate Planner response schema"
+          PLAN=$(curl -sS -X POST "$API/builder/plan"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a small business dashboard with clients and invoices"}')
+          echo "$PLAN" | jq -e '
+            .success == true and
+            (.plan | type) == "object" and
+            (.plan.project_type | type) == "string" and
+            (.plan.goal | type) == "string" and
+            (.plan.stack | type) == "array" and
+            (.plan.pages | type) == "array" and
+            (.plan.features | type) == "array" and
+            (.plan.data_models | type) == "array" and
+            (.plan.files | type) == "array" and
+            (.plan.next_step | type) == "string" and
+            (.credits_used | type) == "number" and
+            (.credits_remaining | type) == "number"
+          ' >/dev/null
+          echo "PLANNER CONTRACT OK"
+
+          echo "3. Validate Builder response schema"
+          BUILD=$(curl -sS -X POST "$API/builder"             -H "$AUTH" -H "$CONTENT"             -d '{"prompt":"Create a simple business website with services and contact","projectName":"Stage 18 Contract Test"}')
+          echo "$BUILD" | jq -e '
+            .success == true and
+            (.project | type) == "object" and
+            (.project.id | type) == "string" and
+            (.project.name | type) == "string" and
+            (.files | type) == "array" and
+            (.files | length) > 0 and
+            all(.files[];
+              (.id | type) == "string" and
+              (.projectId | type) == "string" and
+              (.path | type) == "string" and
+              (.content | type) == "string"
+            ) and
+            (.summary | type) == "string" and
+            (.review | type) == "object" and
+            (.review.passed | type) == "boolean" and
+            (.credits_used | type) == "number" and
+            (.credits_remaining | type) == "number"
+          ' >/dev/null
+          PROJECT_ID=$(echo "$BUILD" | jq -r '.project.id')
+          echo "BUILDER CONTRACT OK: $PROJECT_ID"
+
+          echo "4. Validate Project CRUD response schemas"
+          PROJECT=$(curl -sS "$API/projects/$PROJECT_ID" -H "$AUTH")
+          echo "$PROJECT" | jq -e '
+            .success == true and
+            (.project | type) == "object" and
+            (.project.id | type) == "string" and
+            (.project.name | type) == "string"
+          ' >/dev/null
+          echo "PROJECT READ CONTRACT OK"
+
+          PROJECTS=$(curl -sS "$API/projects" -H "$AUTH")
+          echo "$PROJECTS" | jq -e '
+            .success == true and
+            (.projects | type) == "array" and
+            all(.projects[]; (.id | type) == "string")
+          ' >/dev/null
+          echo "PROJECT LIST CONTRACT OK"
+
+          echo "5. Validate Files CRUD response schemas"
+          FILES=$(curl -sS "$API/projects/$PROJECT_ID/files" -H "$AUTH")
+          echo "$FILES" | jq -e '
+            .success == true and
+            (.files | type) == "array" and
+            all(.files[];
+              (.id | type) == "string" and
+              (.projectId | type) == "string" and
+              (.path | type) == "string" and
+              (.content | type) == "string"
+            )
+          ' >/dev/null
+          FILE_ID=$(echo "$FILES" | jq -r '.files[0].id')
+          test -n "$FILE_ID" && test "$FILE_ID" != "null"
+
+          FILE=$(curl -sS "$API/projects/$PROJECT_ID/files/$FILE_ID" -H "$AUTH")
+          echo "$FILE" | jq -e '
+            .success == true and
+            (.file | type) == "object" and
+            (.file.id | type) == "string" and
+            (.file.projectId | type) == "string" and
+            (.file.path | type) == "string" and
+            (.file.content | type) == "string"
+          ' >/dev/null
+          echo "FILE READ CONTRACT OK"
+
+          echo "6. Validate Review response schema"
+          REVIEW=$(curl -sS -X POST "$API/builder/review"             -H "$AUTH" -H "$CONTENT"             -d '{"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><h1>Stage 18</h1></body></html>"},{"path":"styles.css","content":"body{margin:0}"}]}')
+          echo "$REVIEW" | jq -e '
+            (.success | type) == "boolean" and
+            (.review | type) == "object" and
+            (.review.passed | type) == "boolean" and
+            (.review.issues | type) == "array" and
+            (.review.warnings | type) == "array" and
+            (.review.files_checked | type) == "number"
+          ' >/dev/null
+          echo "REVIEW CONTRACT OK"
+
+          echo "7. Cleanup and verify delete contract"
+          DELETE=$(curl -sS -X DELETE "$API/projects/$PROJECT_ID" -H "$AUTH")
+          echo "$DELETE" | jq -e '.success == true and .deleted == true' >/dev/null
+          test "$(curl -sS -o /tmp/deleted.json -w "%{http_code}" "$API/projects/$PROJECT_ID" -H "$AUTH")" = "404"
+          PROJECT_ID=""
+          echo "DELETE CONTRACT OK"
+
+          echo "BUILDER API CONTRACT & RESPONSE SCHEMA VALIDATION PASSED"
