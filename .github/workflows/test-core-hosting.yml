@@ -1,0 +1,44 @@
+name: Test Core Hosting Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hosting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy a real project and verify public hosting
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          echo "== Health =="
+          curl -fsS "$BASE_URL/health" >/tmp/health.json
+          python -c 'import json; d=json.load(open("/tmp/health.json")); assert d["success"] is True; assert d["status"]=="online"'
+
+          echo "== Create project =="
+          PROJECT=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"name":"Hosting Test Site","description":"Core hosting deployment test"}')
+          PROJECT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])' <<<"$PROJECT")
+
+          echo "== Add index.html =="
+          FILE=$(curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"index.html","content":"<!doctype html><html><head><title>4N DEV Hosting Test</title></head><body><h1>4N DEV Core Hosting Works</h1></body></html>"}')
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["file"]["path"]=="index.html"' <<<"$FILE"
+
+          echo "== Deploy =="
+          DEPLOY=$(curl -fsS -X POST "$BASE_URL/v1/hosting/deployments"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d "{\"projectId\":\"$PROJECT_ID\"}")
+          SLUG=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"]["slug"])' <<<"$DEPLOY")
+          URL="$BASE_URL/sites/$SLUG"
+
+          echo "Published URL: $URL"
+
+          echo "== Verify public site =="
+          curl -fsS "$URL" >/tmp/site.html
+          grep -q "4N DEV Core Hosting Works" /tmp/site.html
+
+          echo "== Verify deployment listing =="
+          LIST=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/hosting/deployments")
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert any(x["slug"]==sys.argv[1] for x in d["deployments"])' "$SLUG" <<<"$LIST"
+
+          echo "Core hosting deployment test passed."
