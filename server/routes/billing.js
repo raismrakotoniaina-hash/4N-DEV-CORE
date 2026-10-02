@@ -133,8 +133,28 @@ router.post("/orders", (req, res) => {
   res.status(201).json({
     success: true,
     order,
-    message: "Order created. Payment provider integration will be handled next."
+    message: "Order created. Use the checkout endpoint to start payment."
   });
+});
+
+router.patch("/orders/:orderId", (req, res) => {
+  const order = getOrder(req.apiKey.id, req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({ success: false, error: "Order not found" });
+  }
+
+  const action = typeof req.body?.action === "string" ? req.body.action.trim().toLowerCase() : "";
+  if (action !== "cancel") {
+    return res.status(400).json({ success: false, error: "Only the cancel action is supported" });
+  }
+
+  if (order.status !== "pending") {
+    return res.status(400).json({ success: false, error: "Only pending orders can be cancelled" });
+  }
+
+  const updated = updateOrder(order.id, { status: "cancelled" });
+  return res.json({ success: true, order: updated });
 });
 
 router.post("/orders/:orderId/payments", (req, res) => {
