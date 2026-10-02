@@ -1,0 +1,77 @@
+name: Final Production Certification Stages 145-160
+
+on:
+  workflow_dispatch:
+
+jobs:
+  final-production-certification-145-160:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Stages 145-148 Advanced authentication and authorization
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          CODE=$(curl -sS -o /tmp/noauth.json -w "%{http_code}" "$BASE/v1/me")
+          test "$CODE" = "401"
+          CODE=$(curl -sS -o /tmp/badkey.json -w "%{http_code}" -H "Authorization: Bearer invalid-key" "$BASE/v1/me")
+          test "$CODE" = "401"
+          ME=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me")
+          echo "$ME" | grep -q '"active":true'
+          CODE=$(curl -sS -o /tmp/noauth-projects.json -w "%{http_code}" "$BASE/v1/projects")
+          test "$CODE" = "401"
+          echo "Stages 145-148 passed"
+
+      - name: Stages 149-152 Credit safety and rejected-request integrity
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          BEFORE=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
+          B=$(echo "$BEFORE" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          CODE=$(curl -sS -o /tmp/bad-chat.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/chat" -d '{"prompt":123}')
+          test "$CODE" = "400"
+          AFTER=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
+          A=$(echo "$AFTER" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          test "$A" = "$B"
+          echo "Stages 149-152 passed"
+
+      - name: Stages 153-156 Data persistence and project-file lifecycle
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          PROJECT=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects" -d '{"name":"final-cert-project","description":"stage-153"}')
+          PID=$(echo "$PROJECT" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+          FILE=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/files/projects/$PID/files" -d '{"path":"index.html","content":"<html><body>final</body></html>"}')
+          FID=$(echo "$FILE" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
+          GOT=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID")
+          echo "$GOT" | grep -q '"content":"<html><body>final</body></html>"'
+          CODE=$(curl -sS -o /tmp/deleted-project-file.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/files/projects/$PID/files/$FID")
+          test "$CODE" = "200"
+          CODE=$(curl -sS -o /tmp/deleted-project.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/projects/$PID")
+          test "$CODE" = "200"
+          CODE=$(curl -sS -o /tmp/missing-final-project.json -w "%{http_code}" -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID")
+          test "$CODE" = "404"
+          echo "Stages 153-156 passed"
+
+      - name: Stages 157-160 Production recovery security and final certification
+        run: |
+          set -e
+          BASE="$BASE_URL"
+          KEY="$API_KEY"
+          HEALTH=$(curl -fsS "$BASE/health")
+          echo "$HEALTH" | grep -q '"status":"online"'
+          ROOT=$(curl -fsS "$BASE/v1/")
+          echo "$ROOT" | grep -q '"name":"4N DEV API"'
+          ME=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/me")
+          echo "$ME" | grep -q '"active":true'
+          CREDITS=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/credits")
+          echo "$CREDITS" | grep -q '"credits"'
+          CODE=$(curl -sS -o /tmp/traversal-final.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/projects" -d '{"name":"../blocked"}')
+          test "$CODE" = "400"
+          echo "FINAL PRODUCTION CERTIFICATION STAGES 145-160 PASSED"
