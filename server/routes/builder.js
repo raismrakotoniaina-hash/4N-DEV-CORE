@@ -4,6 +4,7 @@ import { requirePlanFeature } from "../middleware/planFeature.js";
 import { generateBuilderResponse, generateBuilderPlan, repairBuilderFiles } from "../aiGateway.js";
 import { getProject, createProject } from "../projects.js";
 import { upsertFile } from "../files.js";
+import { createDeployment } from "../hosting.js";
 import { recordUsage } from "../usage.js";
 import { getBalance, spendCredits } from "../credits.js";
 import { getServicePrice, getServiceLimit } from "../creditPolicy.js";
@@ -313,6 +314,21 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
+    let deployment;
+    try {
+      deployment = createDeployment(req.apiKey.id, project, savedFiles);
+    } catch (error) {
+      console.error("4N DEV Builder deployment error:", error.message);
+      return res.status(500).json({
+        success: false,
+        error: "Builder output was saved but automatic deployment failed",
+        project,
+        files: savedFiles,
+        review,
+        repair
+      });
+    }
+
     recordUsage({
       apiKeyId: req.apiKey.id,
       endpoint: "/v1/builder",
@@ -320,7 +336,8 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
         ...result.usage,
         credits_used: BUILDER_COST,
         credits_remaining: balanceAfter,
-        files_generated: savedFiles.length
+        files_generated: savedFiles.length,
+        deployment_id: deployment.id
       }
     });
 
@@ -328,6 +345,14 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       success: true,
       project,
       files: savedFiles,
+      deployment: {
+        id: deployment.id,
+        projectId: deployment.projectId,
+        slug: deployment.slug,
+        status: deployment.status,
+        url: `/sites/${deployment.slug}`,
+        updatedAt: deployment.updatedAt
+      },
       summary: result.summary || (plan && typeof plan.project_type === "string" ? `Planner-driven ${plan.project_type} project generated.` : ""),
       planner_project_type: plan?.project_type || null,
       review,
