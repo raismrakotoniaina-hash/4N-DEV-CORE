@@ -41,7 +41,7 @@ jobs:
           test -n "$project_id"
           got=$(curl -fsS "$BASE_URL/v1/projects/$project_id" -H "Authorization: Bearer $API_KEY")
           echo "$got" | grep -q '"success":true'
-          updated=$(curl -fsS -X PUT "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"production-hardening-updated"}')
+          updated=$(curl -fsS -X PATCH "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"production-hardening-updated"}')
           echo "$updated" | grep -q '"success":true'
           curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
           code=$(curl -sS -o /tmp/deleted-project.json -w "%{http_code}" "$BASE_URL/v1/projects/$project_id" -H "Authorization: Bearer $API_KEY")
