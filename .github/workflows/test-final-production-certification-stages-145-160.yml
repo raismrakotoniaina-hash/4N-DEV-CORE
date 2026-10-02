@@ -49,7 +49,7 @@ jobs:
           PID=$(echo "$PROJECT" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
           FILE=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/files/projects/$PID/files" -d '{"path":"index.html","content":"<html><body>final</body></html>"}')
           FID=$(echo "$FILE" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
-          GOT=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/projects/$PID/files/$FID")
+          GOT=$(curl -fsS -H "Authorization: Bearer $KEY" "$BASE/v1/files/projects/$PID/files/$FID")
           echo "$GOT" | grep -q '"content":"<html><body>final</body></html>"'
           CODE=$(curl -sS -o /tmp/deleted-project-file.json -w "%{http_code}" -H "Authorization: Bearer $KEY" -X DELETE "$BASE/v1/files/projects/$PID/files/$FID")
           test "$CODE" = "200"
