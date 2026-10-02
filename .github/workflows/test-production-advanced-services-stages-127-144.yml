@@ -85,9 +85,18 @@ jobs:
           BASE="$BASE_URL"
           KEY="$API_KEY"
 
-          cat > /tmp/builder-valid.json <<'JSON'
-          {"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>OK</body></html>"},{"path":"app.js","content":"console.log('ok');"},{"path":"styles.css","content":"body{margin:0;padding:0;}"}]}
-          JSON
+          python - <<'PY'
+          import json
+          payload = {
+            "files": [
+              {"path": "index.html", "content": "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head><body>OK</body></html>"},
+              {"path": "app.js", "content": "console.log('ok');"},
+              {"path": "styles.css", "content": "body{margin:0;padding:0;}"}
+            ]
+          }
+          with open("/tmp/builder-valid.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f)
+          PY
 
           REVIEW=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" --data-binary @/tmp/builder-valid.json)
           echo "Builder valid review: $REVIEW"
