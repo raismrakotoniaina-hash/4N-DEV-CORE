@@ -1,0 +1,89 @@
+name: Production Operational Readiness Stages 61-66
+
+on:
+  workflow_dispatch:
+
+jobs:
+  certification:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Stage 61 - Service Availability and Health
+        run: |
+          set -e
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"success":true'
+          echo "$health" | grep -q '"name":"4N DEV Core API"'
+          echo "$health" | grep -q '"status":"online"'
+          echo "STAGE 61 PASSED"
+
+      - name: Stage 62 - API Surface and Authentication
+        run: |
+          set -e
+          root=$(curl -fsS "$BASE_URL/v1/")
+          echo "$root" | grep -q '"name":"4N DEV API"'
+          echo "$root" | grep -q '"version":"v1"'
+          code=$(curl -sS -o /tmp/auth.json -w "%{http_code}" "$BASE_URL/v1/me")
+          test "$code" = "401"
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+          echo "STAGE 62 PASSED"
+
+      - name: Stage 63 - Developer Data Isolation
+        run: |
+          set -e
+          created=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"stage-63-isolation"}')
+          project_id=$(echo "$created" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+          test -n "$project_id"
+          got=$(curl -fsS "$BASE_URL/v1/projects/$project_id" -H "Authorization: Bearer $API_KEY")
+          echo "$got" | grep -q '"success":true'
+          code=$(curl -sS -o /tmp/missing-project.json -w "%{http_code}"             "$BASE_URL/v1/projects/00000000-0000-0000-0000-000000000000"             -H "Authorization: Bearer $API_KEY")
+          test "$code" = "404"
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          echo "STAGE 63 PASSED"
+
+      - name: Stage 64 - File Security and CRUD
+        run: |
+          set -e
+          created=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"name":"stage-64-files"}')
+          project_id=$(echo "$created" | python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])')
+          code=$(curl -sS -o /tmp/path.json -w "%{http_code}" -X POST             "$BASE_URL/v1/projects/$project_id/files"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"path":"../../blocked.txt","content":"blocked"}')
+          test "$code" = "400"
+          file=$(curl -fsS -X POST "$BASE_URL/v1/projects/$project_id/files"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"path":"stage-64.txt","content":"operational-readiness"}')
+          file_id=$(echo "$file" | python -c 'import json,sys; print(json.load(sys.stdin)["file"]["id"])')
+          test -n "$file_id"
+          got=$(curl -fsS "$BASE_URL/v1/projects/$project_id/files/$file_id"             -H "Authorization: Bearer $API_KEY")
+          echo "$got" | grep -q '"success":true'
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id/files/$file_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          curl -fsS -X DELETE "$BASE_URL/v1/projects/$project_id"             -H "Authorization: Bearer $API_KEY" | grep -q '"deleted":true'
+          echo "STAGE 64 PASSED"
+
+      - name: Stage 65 - Credit Safety and Error Recovery
+        run: |
+          set -e
+          before=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          before_credits=$(echo "$before" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          code=$(curl -sS -o /tmp/invalid.json -w "%{http_code}" -X POST "$BASE_URL/v1/chat"             -H "Authorization: Bearer $API_KEY"             -H "content-type: application/json"             -d '{"input":null}')
+          test "$code" = "400"
+          after=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          after_credits=$(echo "$after" | python -c 'import json,sys; print(json.load(sys.stdin)["credits"])')
+          test "$before_credits" = "$after_credits"
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"status":"online"'
+          echo "STAGE 65 PASSED"
+
+      - name: Stage 66 - Final Operational Readiness Certification
+        run: |
+          set -e
+          health=$(curl -fsS "$BASE_URL/health")
+          echo "$health" | grep -q '"success":true'
+          root=$(curl -fsS "$BASE_URL/v1/")
+          echo "$root" | grep -q '"version":"v1"'
+          me=$(curl -fsS "$BASE_URL/v1/me" -H "Authorization: Bearer $API_KEY")
+          echo "$me" | grep -q '"active":true'
+          credits=$(curl -fsS "$BASE_URL/v1/credits" -H "Authorization: Bearer $API_KEY")
+          echo "$credits" | grep -q '"credits"'
+          echo "PRODUCTION OPERATIONAL READINESS STAGES 61-66 PASSED"
