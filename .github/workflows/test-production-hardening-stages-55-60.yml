@@ -17,7 +17,7 @@ jobs:
           health=$(curl -fsS "$BASE_URL/health")
           echo "$health" | grep -q '"success":true'
           echo "$health" | grep -q '"status":"online"'
-          root=$(curl -fsS "$BASE_URL/v1")
+          root=$(curl -fsS "$BASE_URL/v1/")
           echo "$root" | grep -q '"name":"4N DEV API"'
           echo "$root" | grep -q '"version":"v1"'
           echo "STAGE 55 PASSED"
