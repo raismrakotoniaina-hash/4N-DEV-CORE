@@ -16,8 +16,8 @@ jobs:
 
           KEY_RESPONSE=$(curl -fsS -X POST "$BASE_URL/v1/keys"             -H "Content-Type: application/json"             -H "x-core-admin-secret: $ADMIN_SECRET"             -d '{"name":"new-features-lifecycle-test","planId":"free","scopes":["chat"]}')
 
-          TEST_KEY=$(python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; print(d["apiKey"])' <<<"$KEY_RESPONSE")
-          TEST_KEY_ID=$(python -c 'import json,sys; d=json.load(sys.stdin); print(d["developer"]["id"])' <<<"$KEY_RESPONSE")
+          TEST_KEY=$(python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; print(d["api_key"])' <<<"$KEY_RESPONSE")
+          TEST_KEY_ID=$(python -c 'import json,sys; d=json.load(sys.stdin); print(d["id"])' <<<"$KEY_RESPONSE")
 
           ME=$(curl -fsS -H "Authorization: Bearer $TEST_KEY" "$BASE_URL/v1/me")
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["developer"]["active"] is True' <<<"$ME"
@@ -43,14 +43,14 @@ jobs:
           BEFORE=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/credits")
           BEFORE_CREDITS=$(python -c 'import json,sys; print(json.load(sys.stdin)["credits"])' <<<"$BEFORE")
 
-          ORDER_RESPONSE=$(curl -fsS -X POST "$BASE_URL/v1/orders"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"planId":"starter","currency":"MGA"}')
+          ORDER_RESPONSE=$(curl -fsS -X POST "$BASE_URL/v1/billing/orders"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"planId":"starter","currency":"MGA"}')
 
           ORDER_ID=$(python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["order"]["status"]=="pending"; print(d["order"]["id"])' <<<"$ORDER_RESPONSE")
 
-          CANCEL=$(curl -fsS -X PATCH "$BASE_URL/v1/orders/$ORDER_ID"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"action":"cancel"}')
+          CANCEL=$(curl -fsS -X PATCH "$BASE_URL/v1/billing/orders/$ORDER_ID"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"action":"cancel"}')
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["order"]["status"]=="cancelled"' <<<"$CANCEL"
 
-          REPEAT_STATUS=$(curl -sS -o /tmp/repeat-cancel.json -w "%{http_code}" -X PATCH "$BASE_URL/v1/orders/$ORDER_ID"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"action":"cancel"}')
+          REPEAT_STATUS=$(curl -sS -o /tmp/repeat-cancel.json -w "%{http_code}" -X PATCH "$BASE_URL/v1/billing/orders/$ORDER_ID"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"action":"cancel"}')
           test "$REPEAT_STATUS" = "400"
 
           AFTER=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/credits")
