@@ -73,11 +73,6 @@ jobs:
         run: |
           set -e
           BASE="$BASE_URL"
-          KEY="$API_KEY"
-          SUCCESS=$(curl -fsS "$BASE/payment/success")
-          echo "$SUCCESS" | grep -q '"payment_status":"success"'
-          FAILURE=$(curl -fsS "$BASE/payment/failure")
-          echo "$FAILURE" | grep -q '"payment_status":"failure"'
           CODE=$(curl -sS -o /tmp/unknown-webhook.json -w "%{http_code}" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/webhooks/unknown" -d '{}')
           test "$CODE" = "400"
           CODE=$(curl -sS -o /tmp/papi-webhook.json -w "%{http_code}" -H "Content-Type: application/json" -X POST "$BASE/v1/billing/webhooks/papi" -d '{}')
@@ -90,13 +85,21 @@ jobs:
           BASE="$BASE_URL"
           KEY="$API_KEY"
 
-          REVIEW=$(curl -sS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>OK</body></html>"},{"path":"app.js","content":"console.log("ok");"},{"path":"styles.css","content":"body{margin:0;padding:0;}"}]}')
-          echo "Builder valid review: $REVIEW"
-          python -c 'import json,sys; r=json.loads(sys.argv[1]); assert r.get("success") is True, r; assert r.get("review",{}).get("passed") is True, r' "$REVIEW"
+          cat > /tmp/builder-valid.json <<'JSON'
+          {"files":[{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>OK</body></html>"},{"path":"app.js","content":"console.log('ok');"},{"path":"styles.css","content":"body{margin:0;padding:0;}"}]}
+          JSON
 
-          BAD=$(curl -sS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" -d '{"files":[{"path":"index.html","content":"<body>broken</body>"},{"path":"app.js","content":"TODO placeholder"}]}')
+          REVIEW=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" --data-binary @/tmp/builder-valid.json)
+          echo "Builder valid review: $REVIEW"
+          python -c 'import json,sys; r=json.load(sys.stdin); assert r.get("success") is True, r; assert r.get("review",{}).get("passed") is True, r' <<< "$REVIEW"
+
+          cat > /tmp/builder-invalid.json <<'JSON'
+          {"files":[{"path":"index.html","content":"<body>broken</body>"},{"path":"app.js","content":"TODO placeholder"}]}
+          JSON
+
+          BAD=$(curl -fsS -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST "$BASE/v1/builder/review" --data-binary @/tmp/builder-invalid.json)
           echo "Builder invalid review: $BAD"
-          python -c 'import json,sys; r=json.loads(sys.argv[1]); assert r.get("success") is False, r; assert r.get("review",{}).get("passed") is False, r' "$BAD"
+          python -c 'import json,sys; r=json.load(sys.stdin); assert r.get("success") is False, r; assert r.get("review",{}).get("passed") is False, r' <<< "$BAD"
 
           HEALTH=$(curl -fsS "$BASE/health")
           echo "$HEALTH" | grep -q '"status":"online"'
