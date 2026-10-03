@@ -23,7 +23,7 @@ import buildRouter from "./routes/build.js";
 import sitesRouter from "./routes/sites.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
-import { initializeDatabase } from "./db.js";
+import { checkDatabase, initializeDatabase } from "./db.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -55,6 +55,32 @@ app.get("/payment/failure", (req, res) => {
 
 app.get("/health", (_req, res) => {
   res.json({ success: true, name: "4N DEV Core API", status: "online", version: "0.1.0" });
+});
+
+app.get("/health/db", async (_req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({
+      success: false,
+      status: "unavailable",
+      database: "not_configured"
+    });
+  }
+
+  try {
+    await checkDatabase();
+    return res.json({
+      success: true,
+      status: "online",
+      database: "connected"
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+    return res.status(503).json({
+      success: false,
+      status: "unavailable",
+      database: "disconnected"
+    });
+  }
 });
 
 app.get("/v1", (_req, res) => {
