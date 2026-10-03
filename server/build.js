@@ -143,17 +143,82 @@ export async function buildProject(apiKeyId, project, files) {
     validateViteProject(packageJson);
     result = await runViteBuild(validFiles);
   }
-  const now = new Date().toISOString();
-  const build = {id: crypto.randomUUID(), apiKeyId, projectId: project.id, projectName: project.name, ...result, createdAt: now, updatedAt: now};
-  const builds = readBuilds();
-  builds.push(build);
-  writeBuilds(builds);
-  return build;
+
+  const now = new Date();
+  const id = crypto.randomUUID();
+  const { query, isDatabaseConfigured } = await import("./db.js");
+
+  if (!isDatabaseConfigured()) {
+    throw new Error("DATABASE_URL is required for build storage");
+  }
+
+  await query(
+    `INSERT INTO builds
+      (id, api_key_id, project_id, project_name, type, status, entrypoint, files, file_count, total_characters, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $11)`,
+    [
+      id, apiKeyId, project.id, project.name, result.type, result.status,
+      result.entrypoint, JSON.stringify(result.files), result.fileCount,
+      result.totalCharacters, now
+    ]
+  );
+
+  return {
+    id,
+    apiKeyId,
+    projectId: project.id,
+    projectName: project.name,
+    ...result,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString()
+  };
 }
-export function getBuild(apiKeyId, buildId) {
-  return readBuilds().find(build => build.id === buildId && build.apiKeyId === apiKeyId) || null;
+
+export async function getBuild(apiKeyId, buildId) {
+  if (!(await import("./db.js")).isDatabaseConfigured()) return null;
+  const { query } = await import("./db.js");
+  const result = await query(
+    `SELECT id, api_key_id, project_id, project_name, type, status, entrypoint,
+            files, file_count, total_characters, created_at, updated_at
+     FROM builds
+     WHERE id = $1 AND api_key_id = $2
+     LIMIT 1`,
+    [buildId, apiKeyId]
+  );
+  return result.rows[0] ? mapBuildRow(result.rows[0]) : null;
 }
-export function listBuilds(apiKeyId, projectId = null) {
-  return readBuilds().filter(build => build.apiKeyId === apiKeyId && (!projectId || build.projectId === projectId))
-    .map(({files, ...build}) => build).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+export async function listBuilds(apiKeyId, projectId = null) {
+  const { query, isDatabaseConfigured } = await import("./db.js");
+  if (!isDatabaseConfigured()) return [];
+
+  const params = [apiKeyId];
+  let sql = `SELECT id, api_key_id, project_id, project_name, type, status, entrypoint,
+                     files, file_count, total_characters, created_at, updated_at
+              FROM builds WHERE api_key_id = $1`;
+  if (projectId) {
+    params.push(projectId);
+    sql += " AND project_id = $2";
+  }
+  sql += " ORDER BY created_at DESC";
+
+  const result = await query(sql, params);
+  return result.rows.map(mapBuildRow).map(({ files, ...build }) => build);
+}
+
+function mapBuildRow(row) {
+  return {
+    id: row.id,
+    apiKeyId: row.api_key_id,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    type: row.type,
+    status: row.status,
+    entrypoint: row.entrypoint,
+    files: row.files,
+    fileCount: row.file_count,
+    totalCharacters: row.total_characters,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at
+  };
 }
