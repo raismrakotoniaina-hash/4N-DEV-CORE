@@ -178,7 +178,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
-    const balanceBefore = getBalance(req.apiKey.id);
+    const balanceBefore = await getBalance(req.apiKey.id);
     if (balanceBefore < BUILDER_COST) {
       return res.status(402).json({
         success: false,
