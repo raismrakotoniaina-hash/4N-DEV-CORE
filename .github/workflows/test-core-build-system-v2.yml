@@ -2,6 +2,7 @@ name: Core Build System
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   build:
