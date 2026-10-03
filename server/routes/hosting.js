@@ -52,6 +52,7 @@ router.post("/deployments", (req, res) => {
       projectName: deployment.projectName,
       slug: deployment.slug,
       status: deployment.status,
+      version: deployment.version,
       url: `/sites/${deployment.slug}`,
       fileCount: deployment.files.length,
       createdAt: deployment.createdAt,
