@@ -41,7 +41,7 @@ router.post("/webhooks/:provider", async (req, res) => {
       return res.status(403).json(verification);
     }
 
-    const result = fulfillPaidPayment(
+    const result = await fulfillPaidPayment(
       verification.paymentId,
       verification.providerReference
     );
@@ -89,14 +89,14 @@ router.get("/providers", (_req, res) => {
   });
 });
 
-router.get("/orders", (req, res) => {
+router.get("/orders", async (req, res) => {
   res.json({
     success: true,
-    orders: listOrders(req.apiKey.id)
+    orders: await listOrders(req.apiKey.id)
   });
 });
 
-router.post("/orders", (req, res) => {
+router.post("/orders", async (req, res) => {
   const { planId, currency = "MGA" } = req.body || {};
   const plan = getPlan(planId);
 
@@ -123,7 +123,7 @@ router.post("/orders", (req, res) => {
     });
   }
 
-  const order = createOrder(
+  const order = await createOrder(
     req.apiKey.id,
     plan.id,
     currency,
@@ -137,8 +137,8 @@ router.post("/orders", (req, res) => {
   });
 });
 
-router.patch("/orders/:orderId", (req, res) => {
-  const order = getOrder(req.apiKey.id, req.params.orderId);
+router.patch("/orders/:orderId", async (req, res) => {
+  const order = await getOrder(req.apiKey.id, req.params.orderId);
 
   if (!order) {
     return res.status(404).json({ success: false, error: "Order not found" });
@@ -153,12 +153,12 @@ router.patch("/orders/:orderId", (req, res) => {
     return res.status(400).json({ success: false, error: "Only pending orders can be cancelled" });
   }
 
-  const updated = updateOrder(order.id, { status: "cancelled" });
+  const updated = await updateOrder(order.id, { status: "cancelled" });
   return res.json({ success: true, order: updated });
 });
 
-router.post("/orders/:orderId/payments", (req, res) => {
-  const order = getOrder(req.apiKey.id, req.params.orderId);
+router.post("/orders/:orderId/payments", async (req, res) => {
+  const order = await getOrder(req.apiKey.id, req.params.orderId);
 
   if (!order) {
     return res.status(404).json({
@@ -187,7 +187,7 @@ router.post("/orders/:orderId/payments", (req, res) => {
     });
   }
 
-  const payment = createPayment(order.id, provider);
+  const payment = await createPayment(order.id, provider);
 
   res.status(201).json({
     success: true,
@@ -242,7 +242,7 @@ router.post("/orders/:orderId/checkout", async (req, res) => {
     });
   }
 
-  const payment = createPayment(order.id, provider);
+  const payment = await createPayment(order.id, provider);
   const checkoutResult = await adapter.createCheckout({ order, payment });
 
   if (!checkoutResult.success) {
@@ -252,7 +252,7 @@ router.post("/orders/:orderId/checkout", async (req, res) => {
   const checkout = checkoutResult.checkout || null;
 
   if (checkout) {
-    updatePayment(payment.id, {
+    await updatePayment(payment.id, {
       providerReference: checkout.providerReference || payment.providerReference,
       notificationToken: checkout.notificationToken || null,
       checkoutUrl: checkout.paymentLink || checkout.shortLink || null
@@ -262,13 +262,13 @@ router.post("/orders/:orderId/checkout", async (req, res) => {
   res.status(201).json({
     success: true,
     provider: adapter.id,
-    payment: getPayment(payment.id),
+    payment: await getPayment(payment.id),
     checkout
   });
 });
 
-router.get("/payments/:paymentId", (req, res) => {
-  const payment = getPayment(req.params.paymentId);
+router.get("/payments/:paymentId", async (req, res) => {
+  const payment = await getPayment(req.params.paymentId);
 
   if (!payment) {
     return res.status(404).json({
@@ -277,7 +277,7 @@ router.get("/payments/:paymentId", (req, res) => {
     });
   }
 
-  const order = getOrder(req.apiKey.id, payment.orderId);
+  const order = await getOrder(req.apiKey.id, payment.orderId);
   if (!order) {
     return res.status(404).json({
       success: false,
