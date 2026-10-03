@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 
 const dataDir = path.join(process.cwd(), "data");
 const filePath = path.join(dataDir, "projects.json");
