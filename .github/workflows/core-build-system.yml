@@ -50,3 +50,4 @@ JSON
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["entrypoint"]=="index.html"' <<<"$DETAIL"
 
           echo "Core Build System full test passed."
+                    echo "Core Build System full test passed."
