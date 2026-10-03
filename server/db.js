@@ -67,6 +67,24 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_project_files_api_key
       ON project_files(api_key_id);
 
+    CREATE TABLE IF NOT EXISTS credit_accounts (
+      api_key_id TEXT PRIMARY KEY,
+      balance INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_transactions (
+      id UUID PRIMARY KEY,
+      api_key_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_credit_transactions_api_key
+      ON credit_transactions(api_key_id);
+
     CREATE TABLE IF NOT EXISTS usage_records (
       id UUID PRIMARY KEY,
       api_key_id TEXT NOT NULL,
