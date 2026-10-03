@@ -1,6 +1,7 @@
 import express from "express";
 import { requireApiKey } from "../middleware/apiKey.js";
 import { getProject } from "../projects.js";
+import { getBuild } from "../build.js";
 import { listFiles } from "../files.js";
 import {
   createDeployment,
@@ -35,7 +36,28 @@ router.post("/deployments", (req, res) => {
     });
   }
 
-  const files = listFiles(req.apiKey.id, projectId);
+  const buildId = typeof req.body?.buildId === "string" ? req.body.buildId.trim() : "";
+  let files;
+
+  if (buildId) {
+    const build = getBuild(req.apiKey.id, buildId);
+    if (!build || build.projectId !== projectId) {
+      return res.status(404).json({
+        success: false,
+        error: "Build not found for project"
+      });
+    }
+    if (build.status !== "built") {
+      return res.status(400).json({
+        success: false,
+        error: "Build is not ready for deployment"
+      });
+    }
+    files = build.files;
+  } else {
+    files = listFiles(req.apiKey.id, projectId);
+  }
+
   if (!files.some(file => file.path === "index.html")) {
     return res.status(400).json({
       success: false,
@@ -56,6 +78,7 @@ router.post("/deployments", (req, res) => {
       version: deployment.version,
       url: `/sites/${deployment.slug}`,
       fileCount: deployment.files.length,
+      buildId: buildId || null,
       createdAt: deployment.createdAt,
       updatedAt: deployment.updatedAt
     }
