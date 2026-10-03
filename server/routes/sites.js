@@ -27,7 +27,7 @@ router.use("/:slug", (req, res) => {
     });
   }
 
-  const requestedPath = req.path.replace(/^\/+/, "");
+  const requestedPath = req.path.replace(/^\/+/, "") || "index.html";
   const file = findDeploymentFile(deployment, requestedPath);
 
   if (!file) {
