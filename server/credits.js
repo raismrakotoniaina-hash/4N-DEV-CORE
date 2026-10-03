@@ -1,114 +1,123 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+import { query } from "./db.js";
 
-const dataDir = path.resolve("data");
-const creditsPath = path.join(dataDir, "credits.json");
-const transactionsPath = path.join(dataDir, "credit-transactions.json");
-
-function ensureStore(filePath) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, "[]", "utf8");
+function isDatabaseConfigured() {
+  return Boolean(process.env.DATABASE_URL);
 }
 
-function read(filePath) {
-  ensureStore(filePath);
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+function validateAmount(amount) {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("Invalid credit amount");
+  }
 }
 
-function write(filePath, data) {
-  ensureStore(filePath);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
-}
+export async function getBalance(apiKeyId) {
+  if (!isDatabaseConfigured()) return 0;
 
-export function getBalance(apiKeyId) {
-  const accounts = read(creditsPath);
-  let account = accounts.find((item) => item.apiKeyId === apiKeyId);
+  const existing = await query(
+    "SELECT balance FROM credit_accounts WHERE api_key_id = $1",
+    [apiKeyId]
+  );
 
-  if (!account && apiKeyId === "core-bootstrap-key") {
+  if (existing.rows[0]) return Number(existing.rows[0].balance);
+
+  if (apiKeyId === "core-bootstrap-key") {
     const initialCredits = Number(process.env.CORE_API_KEY_INITIAL_CREDITS || 500);
+    const balance = Number.isInteger(initialCredits) && initialCredits > 0 ? initialCredits : 500;
+    const now = new Date();
 
-    account = {
-      apiKeyId,
-      balance: Number.isInteger(initialCredits) && initialCredits > 0 ? initialCredits : 500,
-      updatedAt: new Date().toISOString()
-    };
+    await query(
+      "INSERT INTO credit_accounts (api_key_id, balance, updated_at) VALUES ($1, $2, $3) ON CONFLICT (api_key_id) DO NOTHING",
+      [apiKeyId, balance, now]
+    );
 
-    accounts.push(account);
-    write(creditsPath, accounts);
+    const inserted = await query(
+      "SELECT balance FROM credit_accounts WHERE api_key_id = $1",
+      [apiKeyId]
+    );
 
-    const transactions = read(transactionsPath);
-    transactions.push({
-      id: crypto.randomUUID(),
-      apiKeyId,
-      type: "credit",
-      amount: account.balance,
-      reason: "bootstrap_pro_plan",
-      createdAt: new Date().toISOString()
-    });
-    write(transactionsPath, transactions);
+    if (inserted.rows[0] && Number(inserted.rows[0].balance) === balance) {
+      await query(
+        "INSERT INTO credit_transactions (id, api_key_id, type, amount, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+        [crypto.randomUUID(), apiKeyId, "credit", balance, "bootstrap_pro_plan", now]
+      );
+    }
+
+    return Number(inserted.rows[0]?.balance ?? 0);
   }
 
-  return account?.balance ?? 0;
+  return 0;
 }
 
-export function addCredits(apiKeyId, amount, reason = "top_up") {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("Invalid credit amount");
+export async function addCredits(apiKeyId, amount, reason = "top_up") {
+  validateAmount(amount);
+
+  if (!isDatabaseConfigured()) {
+    throw new Error("DATABASE_URL is required for credit storage");
   }
 
-  const accounts = read(creditsPath);
-  let account = accounts.find((item) => item.apiKeyId === apiKeyId);
+  const now = new Date();
+  const client = await (await import("./db.js")).getDb().connect();
 
-  if (!account) {
-    account = { apiKeyId, balance: 0, updatedAt: new Date().toISOString() };
-    accounts.push(account);
+  try {
+    await client.query("BEGIN");
+
+    const result = await client.query(
+      "INSERT INTO credit_accounts (api_key_id, balance, updated_at) VALUES ($1, $2, $3) ON CONFLICT (api_key_id) DO UPDATE SET balance = credit_accounts.balance + EXCLUDED.balance, updated_at = EXCLUDED.updated_at RETURNING balance",
+      [apiKeyId, amount, now]
+    );
+
+    await client.query(
+      "INSERT INTO credit_transactions (id, api_key_id, type, amount, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [crypto.randomUUID(), apiKeyId, "credit", amount, reason, now]
+    );
+
+    await client.query("COMMIT");
+    return Number(result.rows[0].balance);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-
-  account.balance += amount;
-  account.updatedAt = new Date().toISOString();
-  write(creditsPath, accounts);
-
-  const transactions = read(transactionsPath);
-  transactions.push({
-    id: crypto.randomUUID(),
-    apiKeyId,
-    type: "credit",
-    amount,
-    reason,
-    createdAt: new Date().toISOString()
-  });
-  write(transactionsPath, transactions);
-
-  return account.balance;
 }
 
-export function spendCredits(apiKeyId, amount, reason = "api_usage") {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("Invalid credit amount");
+export async function spendCredits(apiKeyId, amount, reason = "api_usage") {
+  validateAmount(amount);
+
+  if (!isDatabaseConfigured()) {
+    throw new Error("DATABASE_URL is required for credit storage");
   }
 
-  const accounts = read(creditsPath);
-  const account = accounts.find((item) => item.apiKeyId === apiKeyId);
+  const now = new Date();
+  const client = await (await import("./db.js")).getDb().connect();
 
-  if (!account || account.balance < amount) return null;
+  try {
+    await client.query("BEGIN");
 
-  account.balance -= amount;
-  account.updatedAt = new Date().toISOString();
-  write(creditsPath, accounts);
+    const result = await client.query(
+      "UPDATE credit_accounts SET balance = balance - $1, updated_at = $2 WHERE api_key_id = $3 AND balance >= $1 RETURNING balance",
+      [amount, now, apiKeyId]
+    );
 
-  const transactions = read(transactionsPath);
-  transactions.push({
-    id: crypto.randomUUID(),
-    apiKeyId,
-    type: "debit",
-    amount,
-    reason,
-    createdAt: new Date().toISOString()
-  });
-  write(transactionsPath, transactions);
+    if (!result.rows[0]) {
+      await client.query("ROLLBACK");
+      return null;
+    }
 
-  return account.balance;
+    await client.query(
+      "INSERT INTO credit_transactions (id, api_key_id, type, amount, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [crypto.randomUUID(), apiKeyId, "debit", amount, reason, now]
+    );
+
+    await client.query("COMMIT");
+    return Number(result.rows[0].balance);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export function calculateChatCredits(usage = {}) {
