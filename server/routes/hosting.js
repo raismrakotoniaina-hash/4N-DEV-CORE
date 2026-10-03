@@ -5,7 +5,9 @@ import { listFiles } from "../files.js";
 import {
   createDeployment,
   listDeployments,
-  getDeployment
+  getDeployment,
+  listDeploymentHistory,
+  rollbackDeployment
 } from "../hosting.js";
 
 const router = express.Router();
@@ -85,6 +87,50 @@ router.get("/deployments/:deploymentId", (req, res) => {
       url: `/sites/${deployment.slug}`,
       fileCount: deployment.files.length,
       createdAt: deployment.createdAt,
+      updatedAt: deployment.updatedAt
+    }
+  });
+});
+
+router.get("/deployments/:deploymentId/history", (req, res) => {
+  const history = listDeploymentHistory(req.apiKey.id, req.params.deploymentId);
+  if (!history) {
+    return res.status(404).json({ success: false, error: "Deployment not found" });
+  }
+
+  res.json({
+    success: true,
+    deployment_id: req.params.deploymentId,
+    history
+  });
+});
+
+router.post("/deployments/:deploymentId/rollback", (req, res) => {
+  const version = Number(req.body?.version);
+  if (!Number.isInteger(version) || version < 1) {
+    return res.status(400).json({
+      success: false,
+      error: "version must be a positive integer"
+    });
+  }
+
+  const deployment = rollbackDeployment(req.apiKey.id, req.params.deploymentId, version);
+  if (!deployment) {
+    return res.status(404).json({
+      success: false,
+      error: "Deployment or version not found"
+    });
+  }
+
+  res.json({
+    success: true,
+    deployment: {
+      id: deployment.id,
+      projectId: deployment.projectId,
+      slug: deployment.slug,
+      status: deployment.status,
+      version: deployment.version,
+      url: `/sites/${deployment.slug}`,
       updatedAt: deployment.updatedAt
     }
   });
