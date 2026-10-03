@@ -7,7 +7,8 @@ import {
   listDeployments,
   getDeployment,
   listDeploymentHistory,
-  rollbackDeployment
+  rollbackDeployment,
+  deleteDeployment
 } from "../hosting.js";
 
 const router = express.Router();
@@ -85,6 +86,7 @@ router.get("/deployments/:deploymentId", (req, res) => {
       projectName: deployment.projectName,
       slug: deployment.slug,
       status: deployment.status,
+      version: deployment.version,
       url: `/sites/${deployment.slug}`,
       fileCount: deployment.files.length,
       createdAt: deployment.createdAt,
@@ -96,7 +98,10 @@ router.get("/deployments/:deploymentId", (req, res) => {
 router.get("/deployments/:deploymentId/history", (req, res) => {
   const history = listDeploymentHistory(req.apiKey.id, req.params.deploymentId);
   if (!history) {
-    return res.status(404).json({ success: false, error: "Deployment not found" });
+    return res.status(404).json({
+      success: false,
+      error: "Deployment not found"
+    });
   }
 
   res.json({
@@ -115,7 +120,12 @@ router.post("/deployments/:deploymentId/rollback", (req, res) => {
     });
   }
 
-  const deployment = rollbackDeployment(req.apiKey.id, req.params.deploymentId, version);
+  const deployment = rollbackDeployment(
+    req.apiKey.id,
+    req.params.deploymentId,
+    version
+  );
+
   if (!deployment) {
     return res.status(404).json({
       success: false,
@@ -137,9 +147,6 @@ router.post("/deployments/:deploymentId/rollback", (req, res) => {
   });
 });
 
-export default router;
-
-
 router.delete("/deployments/:deploymentId", (req, res) => {
   const deleted = deleteDeployment(req.apiKey.id, req.params.deploymentId);
   if (!deleted) {
@@ -155,3 +162,5 @@ router.delete("/deployments/:deploymentId", (req, res) => {
     status: "unpublished"
   });
 });
+
+export default router;
