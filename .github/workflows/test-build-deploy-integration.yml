@@ -42,7 +42,8 @@ jobs:
           SITE_PATH=$(cat /tmp/site_path)
 
           echo "== Verify public site entrypoint =="
-          SITE_URL="$BASE_URL${SITE_PATH%/}/"\n          HTTP_CODE=$(curl -sS -o /tmp/site.html -w "%{http_code}" "$SITE_URL")
+          SITE_URL="$BASE_URL${SITE_PATH%/}/"
+          HTTP_CODE=$(curl -sS -o /tmp/site.html -w "%{http_code}" "$SITE_URL")
           HTML=$(cat /tmp/site.html)
           echo "Site URL: $SITE_URL"
           echo "HTTP status: $HTTP_CODE"
