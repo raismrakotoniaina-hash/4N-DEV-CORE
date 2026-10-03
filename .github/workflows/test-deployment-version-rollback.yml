@@ -38,7 +38,9 @@ jobs:
           test "$VERSION1" = "1"
 
           echo "== Version 2 file =="
-          curl -fsS -X PUT "$BASE_URL/v1/projects/$PROJECT_ID/files/index.html" \
+          FILES=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/projects/$PROJECT_ID/files")
+          FILE_ID=$(python -c 'import json,sys; print(next(x["id"] for x in json.load(sys.stdin)["files"] if x["path"]=="index.html"))' <<<"$FILES")
+          curl -fsS -X PUT "$BASE_URL/v1/projects/$PROJECT_ID/files/$FILE_ID" \
             -H "Authorization: Bearer $CORE_API_KEY" \
             -H "Content-Type: application/json" \
             -d '{"content":"<!doctype html><html><body><h1>VERSION_TWO</h1></body></html>"}' >/tmp/file2.json
