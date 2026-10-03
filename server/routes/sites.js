@@ -42,6 +42,9 @@ router.use("/:slug", (req, res) => {
     : "";
 
   res.type(contentTypes[extension] || "application/octet-stream");
+  if (file.encoding === "base64") {
+    return res.send(Buffer.from(file.content, "base64"));
+  }
   res.send(file.content);
 });
 
