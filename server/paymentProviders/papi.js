@@ -136,7 +136,7 @@ export default {
       };
     }
 
-    const payment = getPayment(paymentId);
+    const payment = await getPayment(paymentId);
     if (!payment || payment.provider !== "papi") {
       return {
         success: false,
