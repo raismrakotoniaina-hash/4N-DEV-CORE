@@ -1,115 +1,160 @@
-import fs from "fs";
-import path from "path";
+import crypto from "crypto";
+import { query } from "./db.js";
 import { addCredits } from "./credits.js";
 import { updateApiKeyPlan } from "./apiKeys.js";
 import { getPlan } from "./plans.js";
 
-const dataDir = path.join(process.cwd(), "data");
-const filePath = path.join(dataDir, "billing.json");
+function mapOrder(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    apiKeyId: row.api_key_id,
+    planId: row.plan_id,
+    currency: row.currency,
+    amount: Number(row.amount),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
 
-function ensureStore() {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, JSON.stringify({
-      orders: [],
-      payments: []
-    }, null, 2), "utf8");
+function mapPayment(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    provider: row.provider,
+    providerReference: row.provider_reference,
+    notificationToken: row.notification_token,
+    checkoutUrl: row.checkout_url,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export async function createOrder(apiKeyId, planId, currency, amount) {
+  const now = new Date();
+  const id = crypto.randomUUID();
+  const result = await query(
+    `INSERT INTO billing_orders
+      (id, api_key_id, plan_id, currency, amount, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6, $6)
+     RETURNING *`,
+    [id, apiKeyId, planId, currency, amount, now]
+  );
+  return mapOrder(result.rows[0]);
+}
+
+export async function getOrder(apiKeyId, orderId) {
+  const result = await query(
+    `SELECT * FROM billing_orders
+     WHERE id = $1 AND api_key_id = $2
+     LIMIT 1`,
+    [orderId, apiKeyId]
+  );
+  return mapOrder(result.rows[0]);
+}
+
+export async function listOrders(apiKeyId) {
+  const result = await query(
+    `SELECT * FROM billing_orders
+     WHERE api_key_id = $1
+     ORDER BY created_at DESC`,
+    [apiKeyId]
+  );
+  return result.rows.map(mapOrder);
+}
+
+export async function createPayment(orderId, provider, providerReference = null) {
+  const now = new Date();
+  const id = crypto.randomUUID();
+  const result = await query(
+    `INSERT INTO billing_payments
+      (id, order_id, provider, provider_reference, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 'pending', $5, $5)
+     RETURNING *`,
+    [id, orderId, provider, providerReference, now]
+  );
+  return mapPayment(result.rows[0]);
+}
+
+export async function getPayment(paymentId) {
+  const result = await query(
+    `SELECT * FROM billing_payments
+     WHERE id = $1
+     LIMIT 1`,
+    [paymentId]
+  );
+  return mapPayment(result.rows[0]);
+}
+
+export async function updatePayment(paymentId, fields) {
+  const allowed = {
+    providerReference: "provider_reference",
+    notificationToken: "notification_token",
+    checkoutUrl: "checkout_url",
+    status: "status"
+  };
+
+  const updates = [];
+  const values = [];
+  let index = 1;
+
+  for (const [key, column] of Object.entries(allowed)) {
+    if (Object.prototype.hasOwnProperty.call(fields, key)) {
+      updates.push(`${column} = $${index++}`);
+      values.push(fields[key]);
+    }
   }
+
+  if (!updates.length) return getPayment(paymentId);
+
+  values.push(new Date(), paymentId);
+
+  const result = await query(
+    `UPDATE billing_payments
+     SET ${updates.join(", ")}, updated_at = $${index++}
+     WHERE id = $${index}
+     RETURNING *`,
+    values
+  );
+
+  return mapPayment(result.rows[0]);
 }
 
-function readStore() {
-  ensureStore();
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-
-function writeStore(store) {
-  ensureStore();
-  fs.writeFileSync(filePath, JSON.stringify(store, null, 2), "utf8");
-}
-
-export function createOrder(apiKeyId, planId, currency, amount) {
-  const store = readStore();
-  const now = new Date().toISOString();
-
-  const order = {
-    id: crypto.randomUUID(),
-    apiKeyId,
-    planId,
-    currency,
-    amount,
-    status: "pending",
-    createdAt: now,
-    updatedAt: now
+export async function updateOrder(orderId, fields) {
+  const allowed = {
+    planId: "plan_id",
+    currency: "currency",
+    amount: "amount",
+    status: "status"
   };
 
-  store.orders.push(order);
-  writeStore(store);
-  return order;
-}
+  const updates = [];
+  const values = [];
+  let index = 1;
 
-export function getOrder(apiKeyId, orderId) {
-  return readStore().orders.find(
-    order => order.id === orderId && order.apiKeyId === apiKeyId
-  ) || null;
-}
+  for (const [key, column] of Object.entries(allowed)) {
+    if (Object.prototype.hasOwnProperty.call(fields, key)) {
+      updates.push(`${column} = $${index++}`);
+      values.push(fields[key]);
+    }
+  }
 
-export function listOrders(apiKeyId) {
-  return readStore().orders.filter(order => order.apiKeyId === apiKeyId);
-}
+  if (!updates.length) return null;
 
-export function createPayment(orderId, provider, providerReference = null) {
-  const store = readStore();
-  const now = new Date().toISOString();
+  values.push(new Date(), orderId);
 
-  const payment = {
-    id: crypto.randomUUID(),
-    orderId,
-    provider,
-    providerReference,
-    status: "pending",
-    createdAt: now,
-    updatedAt: now
-  };
+  const result = await query(
+    `UPDATE billing_orders
+     SET ${updates.join(", ")}, updated_at = $${index++}
+     WHERE id = $${index}
+     RETURNING *`,
+    values
+  );
 
-  store.payments.push(payment);
-  writeStore(store);
-  return payment;
-}
-
-export function getPayment(paymentId) {
-  return readStore().payments.find(payment => payment.id === paymentId) || null;
-}
-
-export function updatePayment(paymentId, fields) {
-  const store = readStore();
-  const index = store.payments.findIndex(payment => payment.id === paymentId);
-
-  if (index === -1) return null;
-
-  store.payments[index] = {
-    ...store.payments[index],
-    ...fields,
-    updatedAt: new Date().toISOString()
-  };
-
-  writeStore(store);
-  return store.payments[index];
-}
-
-export function updateOrder(orderId, fields) {
-  const store = readStore();
-  const index = store.orders.findIndex(order => order.id === orderId);
-
-  if (index === -1) return null;
-
-  store.orders[index] = {
-    ...store.orders[index],
-    ...fields,
-    updatedAt: new Date().toISOString()
-  };
-
-  writeStore(store);
-  return store.orders[index];
+  return mapOrder(result.rows[0]);
 }
 
 export function listProviders() {
@@ -131,12 +176,17 @@ export function listProviders() {
   ];
 }
 
-export function fulfillPaidPayment(paymentId, providerReference = null) {
-  const store = readStore();
-  const payment = store.payments.find(item => item.id === paymentId);
+export async function fulfillPaidPayment(paymentId, providerReference = null) {
+  const paymentResult = await query(
+    `SELECT * FROM billing_payments
+     WHERE id = $1
+     LIMIT 1`,
+    [paymentId]
+  );
+  const payment = mapPayment(paymentResult.rows[0]);
   if (!payment) return { success: false, error: "Payment not found" };
 
-  const order = store.orders.find(item => item.id === payment.orderId);
+  const order = await getOrderById(payment.orderId);
   if (!order) return { success: false, error: "Order not found" };
 
   if (payment.status === "paid" || order.status === "paid") {
@@ -153,31 +203,54 @@ export function fulfillPaidPayment(paymentId, providerReference = null) {
     return { success: false, error: "Invalid plan credits" };
   }
 
-  payment.status = "paid";
-  payment.providerReference = providerReference || payment.providerReference;
-  payment.updatedAt = new Date().toISOString();
+  const now = new Date();
+  const updatedPaymentResult = await query(
+    `UPDATE billing_payments
+     SET status = 'paid',
+         provider_reference = COALESCE($1, provider_reference),
+         updated_at = $2
+     WHERE id = $3 AND status <> 'paid'
+     RETURNING *`,
+    [providerReference, now, paymentId]
+  );
 
-  order.status = "paid";
-  order.updatedAt = new Date().toISOString();
+  if (!updatedPaymentResult.rows[0]) {
+    const latestPayment = await getPayment(paymentId);
+    const latestOrder = await getOrderById(payment.orderId);
+    return {
+      success: true,
+      alreadyFulfilled: true,
+      payment: latestPayment,
+      order: latestOrder
+    };
+  }
 
-  writeStore(store);
-
-  const balance = addCredits(
+  const updatedOrder = await updateOrder(order.id, { status: "paid" });
+  const balance = await addCredits(
     order.apiKeyId,
     plan.credits,
     `payment_${payment.provider}`
   );
-
-  const updatedKey = updateApiKeyPlan(order.apiKeyId, plan.id);
+  const updatedKey = await updateApiKeyPlan(order.apiKeyId, plan.id);
 
   return {
     success: true,
     alreadyFulfilled: false,
-    payment,
-    order,
+    payment: mapPayment(updatedPaymentResult.rows[0]),
+    order: updatedOrder,
     plan: plan.id,
     planUpdated: Boolean(updatedKey) || order.apiKeyId === "core-bootstrap-key",
     creditsAdded: plan.credits,
     balance
   };
+}
+
+async function getOrderById(orderId) {
+  const result = await query(
+    `SELECT * FROM billing_orders
+     WHERE id = $1
+     LIMIT 1`,
+    [orderId]
+  );
+  return mapOrder(result.rows[0]);
 }
