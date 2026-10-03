@@ -1,0 +1,77 @@
+name: Test Deployment Version History and Rollback
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployment version history and rollback
+        env:
+          BASE_URL: https://fourn-dev-core.onrender.com
+          CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          echo "== Create project =="
+          PROJECT=$(curl -fsS -X POST "$BASE_URL/v1/projects" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"Rollback Test Site","description":"Version history and rollback test"}')
+          PROJECT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])' <<<"$PROJECT")
+
+          echo "== Version 1 file =="
+          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"path":"index.html","content":"<!doctype html><html><body><h1>VERSION_ONE</h1></body></html>"}' >/tmp/file1.json
+
+          echo "== Deploy version 1 =="
+          DEPLOY1=$(curl -fsS -X POST "$BASE_URL/v1/hosting/deployments" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{"projectId":"$PROJECT_ID"}")
+          DEPLOYMENT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"]["id"])' <<<"$DEPLOY1")
+          SLUG=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"]["slug"])' <<<"$DEPLOY1")
+          VERSION1=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"].get("version",1))' <<<"$DEPLOY1")
+          test "$VERSION1" = "1"
+
+          echo "== Version 2 file =="
+          curl -fsS -X PUT "$BASE_URL/v1/projects/$PROJECT_ID/files/index.html" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"<!doctype html><html><body><h1>VERSION_TWO</h1></body></html>"}' >/tmp/file2.json
+
+          echo "== Deploy version 2 =="
+          DEPLOY2=$(curl -fsS -X POST "$BASE_URL/v1/hosting/deployments" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{"projectId":"$PROJECT_ID"}")
+          VERSION2=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"].get("version",0))' <<<"$DEPLOY2")
+          test "$VERSION2" = "2"
+
+          echo "== Verify version 2 is live =="
+          curl -fsS "$BASE_URL/sites/$SLUG" >/tmp/live2.html
+          grep -q "VERSION_TWO" /tmp/live2.html
+
+          echo "== Verify history =="
+          HISTORY=$(curl -fsS \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            "$BASE_URL/v1/hosting/deployments/$DEPLOYMENT_ID/history")
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert any(x["version"]==1 for x in d["history"])' <<<"$HISTORY"
+
+          echo "== Roll back to version 1 =="
+          ROLLBACK=$(curl -fsS -X POST \
+            "$BASE_URL/v1/hosting/deployments/$DEPLOYMENT_ID/rollback" \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"version":1}')
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["deployment"]["status"]=="deployed"' <<<"$ROLLBACK"
+
+          echo "== Verify version 1 is live again =="
+          curl -fsS "$BASE_URL/sites/$SLUG" >/tmp/live1.html
+          grep -q "VERSION_ONE" /tmp/live1.html
+          ! grep -q "VERSION_TWO" /tmp/live1.html
+
+          echo "Deployment version history and rollback test passed."
