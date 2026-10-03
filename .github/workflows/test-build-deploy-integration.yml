@@ -41,7 +41,13 @@ jobs:
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["deployment"]["status"]=="deployed"; assert d["deployment"]["buildId"]=="'"$BUILD_ID"'"; print(d["deployment"]["url"])' <<<"$DEPLOY" > /tmp/site_path
           SITE_PATH=$(cat /tmp/site_path)
 
-          echo "== Verify public site =="
-          curl -fsS "$BASE_URL$SITE_PATH" | grep -q "4N BUILD TO DEPLOY OK"
+          echo "== Verify public site entrypoint =="
+          HTML=$(curl -fsS "$BASE_URL$SITE_PATH")
+          echo "$HTML" | grep -q "<title>4N Build Deploy</title>"
+
+          echo "== Verify built JavaScript asset =="
+          ASSET_PATH=$(python -c 'import re,sys; h=sys.stdin.read(); m=re.search(r'<script[^>]+src="([^"]+)"',h); assert m; print(m.group(1))' <<<"$HTML")
+          ASSET=$(curl -fsS "$BASE_URL$ASSET_PATH")
+          echo "$ASSET" | grep -q "4N BUILD TO DEPLOY OK"
 
           echo "BUILD TO DEPLOY INTEGRATION TEST PASSED"
