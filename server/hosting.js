@@ -95,3 +95,16 @@ export function findDeploymentFile(deployment, requestedPath) {
   const cleanPath = normalized.split("/").filter(Boolean).join("/");
   return deployment.files.find(file => file.path === cleanPath) || null;
 }
+
+
+export function deleteDeployment(apiKeyId, deploymentId) {
+  const deployments = readDeployments();
+  const index = deployments.findIndex(
+    item => item.id === deploymentId && item.apiKeyId === apiKeyId
+  );
+  if (index === -1) return false;
+
+  deployments.splice(index, 1);
+  writeDeployments(deployments);
+  return true;
+}
