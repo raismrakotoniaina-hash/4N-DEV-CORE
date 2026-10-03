@@ -31,7 +31,7 @@ jobs:
           DEPLOY1=$(curl -fsS -X POST "$BASE_URL/v1/hosting/deployments" \
             -H "Authorization: Bearer $CORE_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{"projectId":"$PROJECT_ID"}")
+            -d '{"projectId":"'"$PROJECT_ID"'"}')
           DEPLOYMENT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"]["id"])' <<<"$DEPLOY1")
           SLUG=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"]["slug"])' <<<"$DEPLOY1")
           VERSION1=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"].get("version",1))' <<<"$DEPLOY1")
@@ -49,7 +49,7 @@ jobs:
           DEPLOY2=$(curl -fsS -X POST "$BASE_URL/v1/hosting/deployments" \
             -H "Authorization: Bearer $CORE_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{"projectId":"$PROJECT_ID"}")
+            -d '{"projectId":"'"$PROJECT_ID"'"}')
           VERSION2=$(python -c 'import json,sys; print(json.load(sys.stdin)["deployment"].get("version",0))' <<<"$DEPLOY2")
           test "$VERSION2" = "2"
 
