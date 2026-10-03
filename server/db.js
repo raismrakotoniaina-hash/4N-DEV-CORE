@@ -128,6 +128,38 @@ export async function initializeDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_builds_project
       ON builds(project_id);
+
+    CREATE TABLE IF NOT EXISTS billing_orders (
+      id UUID PRIMARY KEY,
+      api_key_id TEXT NOT NULL,
+      plan_id TEXT NOT NULL,
+      currency TEXT NOT NULL,
+      amount NUMERIC NOT NULL,
+      status TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_billing_orders_api_key
+      ON billing_orders(api_key_id);
+
+    CREATE TABLE IF NOT EXISTS billing_payments (
+      id UUID PRIMARY KEY,
+      order_id UUID NOT NULL REFERENCES billing_orders(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      provider_reference TEXT,
+      notification_token TEXT,
+      checkout_url TEXT,
+      status TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_billing_payments_order
+      ON billing_payments(order_id);
+
+    CREATE INDEX IF NOT EXISTS idx_billing_payments_provider_reference
+      ON billing_payments(provider_reference);
   `);
 
   return true;
