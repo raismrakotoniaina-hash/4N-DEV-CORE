@@ -1,4 +1,4 @@
-name: Test Core Build System
+name: Core Build System Manual Test V2
 
 on:
   workflow_dispatch:
