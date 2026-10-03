@@ -91,3 +91,20 @@ router.get("/deployments/:deploymentId", (req, res) => {
 });
 
 export default router;
+
+
+router.delete("/deployments/:deploymentId", (req, res) => {
+  const deleted = deleteDeployment(req.apiKey.id, req.params.deploymentId);
+  if (!deleted) {
+    return res.status(404).json({
+      success: false,
+      error: "Deployment not found"
+    });
+  }
+
+  res.json({
+    success: true,
+    deployment_id: req.params.deploymentId,
+    status: "unpublished"
+  });
+});
