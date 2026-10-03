@@ -13,25 +13,19 @@ jobs:
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
         run: |
           set -euo pipefail
-
           echo "== Create project =="
           PROJECT=$(curl -fsS -X POST "$BASE_URL/v1/projects" -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" -d '{"name":"Build Test Site","description":"Build system test"}')
           PROJECT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])' <<<"$PROJECT")
-
           echo "== Add build files =="
           curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files" -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" --data-binary @- <<'JSON' >/tmp/index.json
 {"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body><h1>BUILD_OK</h1></body></html>"}
 JSON
-
           curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files" -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" -d '{"path":"styles.css","content":"body { font-family: sans-serif; }"}' >/tmp/style.json
-
           echo "== Build project =="
           BUILD=$(curl -fsS -X POST "$BASE_URL/v1/builds" -H "Authorization: Bearer $CORE_API_KEY" -H "Content-Type: application/json" -d '{"projectId":"'"$PROJECT_ID"'"}')
           BUILD_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["build"]["id"])' <<<"$BUILD")
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["status"]=="built"; assert d["build"]["type"]=="static"; assert d["build"]["fileCount"]==2' <<<"$BUILD"
-
           echo "== Get build =="
           DETAIL=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/builds/$BUILD_ID")
           python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["entrypoint"]=="index.html"' <<<"$DETAIL"
-
           echo "Build system test passed."
