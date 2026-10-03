@@ -1,0 +1,36 @@
+# Git
+.git
+.github
+.gitignore
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Local/runtime data
+data
+logs
+*.log
+
+# Build/test output
+dist
+build
+coverage
+.nyc_output
+
+# Local editor/OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docker local files
+docker-compose.override.yml
