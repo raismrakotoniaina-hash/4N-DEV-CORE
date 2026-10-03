@@ -2,6 +2,9 @@ name: Core Build System
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/core-build-system.yml"
 
 jobs:
   build:
@@ -26,7 +29,7 @@ jobs:
             -H "Authorization: Bearer $CORE_API_KEY" \
             -H "Content-Type: application/json" \
             --data-binary @- <<'JSON' >/tmp/index.json
-{"path":"index.html","content":"<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h1>BUILD_OK</h1></body></html>"}
+{"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body><h1>BUILD_OK</h1></body></html>"}
 JSON
 
           curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files" \
