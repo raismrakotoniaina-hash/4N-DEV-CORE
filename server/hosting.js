@@ -51,7 +51,8 @@ export function createDeployment(apiKeyId, project, files) {
     status: "deployed",
     files: files.map(file => ({
       path: file.path,
-      content: file.content
+      content: file.content,
+      encoding: file.encoding || "utf8"
     })),
     history: existing >= 0
       ? [
