@@ -89,7 +89,7 @@ async function runViteBuild(files) {
     await execFileAsync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], {
       cwd: projectRoot, timeout: BUILD_TIMEOUT_MS, maxBuffer: 1024 * 1024
     });
-    await execFileAsync("npm", ["run", "build"], {
+    await execFileAsync("npm", ["run", "build", "--", "--base", "./"], {
       cwd: projectRoot, timeout: BUILD_TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024
     });
     const distRoot = path.join(projectRoot, "dist");
