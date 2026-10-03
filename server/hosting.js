@@ -41,6 +41,9 @@ export function createDeployment(apiKeyId, project, files) {
 
   const deployment = {
     id: existing >= 0 ? deployments[existing].id : crypto.randomUUID(),
+    version: existing >= 0
+      ? (deployments[existing].version || 0) + 1
+      : 1,
     apiKeyId,
     projectId: project.id,
     projectName: project.name,
@@ -50,6 +53,17 @@ export function createDeployment(apiKeyId, project, files) {
       path: file.path,
       content: file.content
     })),
+    history: existing >= 0
+      ? [
+          ...(deployments[existing].history || []),
+          {
+            version: deployments[existing].version || 1,
+            status: deployments[existing].status,
+            files: deployments[existing].files,
+            createdAt: deployments[existing].updatedAt
+          }
+        ]
+      : [],
     createdAt: existing >= 0 ? deployments[existing].createdAt : now,
     updatedAt: now
   };
@@ -107,4 +121,54 @@ export function deleteDeployment(apiKeyId, deploymentId) {
   deployments.splice(index, 1);
   writeDeployments(deployments);
   return true;
+}
+
+
+export function listDeploymentHistory(apiKeyId, deploymentId) {
+  const deployment = getDeployment(apiKeyId, deploymentId);
+  if (!deployment) return null;
+
+  return (deployment.history || [])
+    .map(item => ({
+      version: item.version,
+      status: item.status,
+      fileCount: item.files.length,
+      createdAt: item.createdAt
+    }))
+    .sort((a, b) => b.version - a.version);
+}
+
+export function rollbackDeployment(apiKeyId, deploymentId, version) {
+  const deployments = readDeployments();
+  const index = deployments.findIndex(
+    item => item.id === deploymentId && item.apiKeyId === apiKeyId
+  );
+  if (index === -1) return null;
+
+  const deployment = deployments[index];
+  const target = (deployment.history || []).find(item => item.version === version);
+  if (!target) return null;
+
+  const now = new Date().toISOString();
+  const currentSnapshot = {
+    version: deployment.version || 1,
+    status: deployment.status,
+    files: deployment.files,
+    createdAt: now
+  };
+
+  const history = [
+    ...(deployment.history || []).filter(item => item.version !== version),
+    currentSnapshot
+  ];
+
+  deployment.files = target.files;
+  deployment.version = (deployment.version || 1) + 1;
+  deployment.status = "deployed";
+  deployment.updatedAt = now;
+  deployment.history = history;
+
+  deployments[index] = deployment;
+  writeDeployments(deployments);
+  return deployment;
 }
