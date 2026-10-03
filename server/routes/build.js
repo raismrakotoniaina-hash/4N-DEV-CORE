@@ -21,7 +21,7 @@ router.post("/builds", async (req, res) => {
       });
     }
 
-    const project = getProject(req.apiKey.id, projectId);
+    const project = await getProject(req.apiKey.id, projectId);
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -29,7 +29,7 @@ router.post("/builds", async (req, res) => {
       });
     }
 
-    const files = listFiles(req.apiKey.id, projectId);
+    const files = await listFiles(req.apiKey.id, projectId);
     const build = await buildProject(req.apiKey.id, project, files);
 
     return res.status(201).json({
@@ -55,19 +55,19 @@ router.post("/builds", async (req, res) => {
   }
 });
 
-router.get("/builds", (req, res) => {
+router.get("/builds", async (req, res, next) => {
   const projectId = typeof req.query.projectId === "string"
     ? req.query.projectId.trim()
     : null;
 
   res.json({
     success: true,
-    builds: listBuilds(req.apiKey.id, projectId)
+    builds: await listBuilds(req.apiKey.id, projectId)
   });
 });
 
-router.get("/builds/:buildId", (req, res) => {
-  const build = getBuild(req.apiKey.id, req.params.buildId);
+router.get("/builds/:buildId", async (req, res, next) => {
+  const build = await getBuild(req.apiKey.id, req.params.buildId);
   if (!build) {
     return res.status(404).json({
       success: false,
