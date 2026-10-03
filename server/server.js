@@ -65,86 +65,98 @@ app.get("/v1", (_req, res) => {
   });
 });
 
-app.post("/v1/keys", (req, res) => {
-  const adminSecret = process.env.CORE_ADMIN_SECRET;
-  const suppliedSecret = req.get("x-core-admin-secret");
+app.post("/v1/keys", async (req, res, next) => {
+  try {
+    const adminSecret = process.env.CORE_ADMIN_SECRET;
+    const suppliedSecret = req.get("x-core-admin-secret");
 
-  if (!adminSecret || adminSecret === "change-this-before-use") {
-    return res.status(503).json({ success: false, error: "CORE_ADMIN_SECRET is not configured" });
-  }
-
-  if (!suppliedSecret || suppliedSecret !== adminSecret) {
-    return res.status(403).json({ success: false, error: "Forbidden" });
-  }
-
-  const { name, scopes, planId } = req.body || {};
-  const selectedPlan = getPlan(["free", "starter", "pro", "premium"].includes(planId) ? planId : "free");
-  const allowedScopes = ["chat", "coding", "image", "embeddings"];
-  const defaultScopes = selectedPlan.features.filter((feature) => allowedScopes.includes(feature));
-
-  const apiKey = createApiKey({
-    name: typeof name === "string" && name.trim() ? name.trim() : "Developer",
-    scopes: Array.isArray(scopes) && scopes.length ? scopes : defaultScopes,
-    planId: selectedPlan.id
-  });
-
-  addCredits(apiKey.id, selectedPlan.credits, `plan_${selectedPlan.id}`);
-
-  res.status(201).json({
-    success: true,
-    message: "Store this API key securely. It will not be returned again.",
-    api_key: apiKey.key,
-    id: apiKey.id,
-    name: apiKey.name,
-    plan: selectedPlan.id,
-    credits: selectedPlan.credits,
-    scopes: apiKey.scopes,
-    features: selectedPlan.features,
-    createdAt: apiKey.createdAt
-  });
-});
-
-app.get("/v1/keys", requireApiKey(), (req, res) => {
-  const keys = listApiKeys(req.apiKey.id).map(({ hash, ...safe }) => safe);
-  res.json({ success: true, keys });
-});
-
-app.patch("/v1/keys/:keyId", requireApiKey(), (req, res) => {
-  if (req.params.keyId !== req.apiKey.id) {
-    return res.status(403).json({ success: false, error: "Cannot modify another API key" });
-  }
-  if (typeof req.body?.active !== "boolean") {
-    return res.status(400).json({ success: false, error: "active must be a boolean" });
-  }
-  const updated = setApiKeyActive(req.apiKey.id, req.body.active);
-  if (!updated) return res.status(404).json({ success: false, error: "API key not found" });
-  res.json({ success: true, key: { id: updated.id, name: updated.name, planId: updated.planId, scopes: updated.scopes, active: updated.active, createdAt: updated.createdAt, updatedAt: updated.updatedAt } });
-});
-
-app.get("/v1/me", requireApiKey(), (req, res) => {
-  const plan = getPlan(req.apiKey.planId || "free");
-  res.json({
-    success: true,
-    developer: {
-      id: req.apiKey.id,
-      name: req.apiKey.name,
-      plan: plan?.id || "free",
-      features: plan?.features || [],
-      scopes: req.apiKey.scopes,
-      credits: getBalance(req.apiKey.id),
-      active: req.apiKey.active,
-      createdAt: req.apiKey.createdAt
+    if (!adminSecret || adminSecret === "change-this-before-use") {
+      return res.status(503).json({ success: false, error: "CORE_ADMIN_SECRET is not configured" });
     }
-  });
+
+    if (!suppliedSecret || suppliedSecret !== adminSecret) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const { name, scopes, planId } = req.body || {};
+    const selectedPlan = getPlan(["free", "starter", "pro", "premium"].includes(planId) ? planId : "free");
+    const allowedScopes = ["chat", "coding", "image", "embeddings"];
+    const defaultScopes = selectedPlan.features.filter((feature) => allowedScopes.includes(feature));
+
+    const apiKey = await createApiKey({
+      name: typeof name === "string" && name.trim() ? name.trim() : "Developer",
+      scopes: Array.isArray(scopes) && scopes.length ? scopes : defaultScopes,
+      planId: selectedPlan.id
+    });
+
+    await addCredits(apiKey.id, selectedPlan.credits, `plan_${selectedPlan.id}`);
+
+    res.status(201).json({
+      success: true,
+      message: "Store this API key securely. It will not be returned again.",
+      api_key: apiKey.key,
+      id: apiKey.id,
+      name: apiKey.name,
+      plan: selectedPlan.id,
+      credits: selectedPlan.credits,
+      scopes: apiKey.scopes,
+      features: selectedPlan.features,
+      createdAt: apiKey.createdAt
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/v1/keys", requireApiKey(), async (req, res, next) => {
+  try {
+    const keys = (await listApiKeys(req.apiKey.id)).map(({ hash, ...safe }) => safe);
+    res.json({ success: true, keys });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/v1/keys/:keyId", requireApiKey(), async (req, res, next) => {
+  try {
+    if (req.params.keyId !== req.apiKey.id) {
+      return res.status(403).json({ success: false, error: "Cannot modify another API key" });
+    }
+    if (typeof req.body?.active !== "boolean") {
+      return res.status(400).json({ success: false, error: "active must be a boolean" });
+    }
+    const updated = await setApiKeyActive(req.apiKey.id, req.body.active);
+    if (!updated) return res.status(404).json({ success: false, error: "API key not found" });
+    res.json({ success: true, key: { id: updated.id, name: updated.name, planId: updated.planId, scopes: updated.scopes, active: updated.active, createdAt: updated.createdAt, updatedAt: updated.updatedAt } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/v1/me", requireApiKey(), async (req, res, next) => {
+  try {
+    const plan = getPlan(req.apiKey.planId || "free");
+    res.json({
+      success: true,
+      developer: {
+        id: req.apiKey.id,
+        name: req.apiKey.name,
+        plan: plan?.id || "free",
+        features: plan?.features || [],
+        scopes: req.apiKey.scopes,
+        credits: await getBalance(req.apiKey.id),
+        active: req.apiKey.active,
+        createdAt: req.apiKey.createdAt
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Billing routes MUST be registered before generic /v1 routers.
-// Otherwise a generic API-key middleware can intercept the public PAPI webhook.
 app.use("/v1/billing", billingRouter);
-
-// Published client sites are public; deployment management remains API-key protected.
 app.use("/sites", sitesRouter);
-
 app.use("/v1", apiRateLimit);
 app.use("/v1", chatRouter);
 app.use("/v1", codingRouter);
