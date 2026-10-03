@@ -23,6 +23,7 @@ import buildRouter from "./routes/build.js";
 import sitesRouter from "./routes/sites.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
+import { initializeDatabase } from "./db.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -159,6 +160,22 @@ app.use("/v1", builderRouter);
 app.use("/v1/hosting", hostingRouter);
 app.use("/v1", buildRouter);
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`4N DEV Core API running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    if (process.env.DATABASE_URL) {
+      await initializeDatabase();
+      console.log("PostgreSQL database initialized");
+    } else {
+      console.log("PostgreSQL not configured; using local development storage");
+    }
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`4N DEV Core API running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Database initialization failed:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
