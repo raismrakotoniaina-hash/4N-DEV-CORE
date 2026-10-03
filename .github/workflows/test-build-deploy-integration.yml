@@ -46,7 +46,7 @@ jobs:
           echo "$HTML" | grep -q "<title>4N Build Deploy</title>"
 
           echo "== Verify built JavaScript asset =="
-          ASSET_PATH=$(python -c 'import re,sys; h=sys.stdin.read(); m=re.search(r'<script[^>]+src="([^"]+)"',h); assert m; print(m.group(1))' <<<"$HTML")
+          ASSET_PATH=$(printf '%s' "$HTML" | grep -o 'src="[^"]*"' | head -n 1 | cut -d'"' -f2)
           ASSET=$(curl -fsS "$BASE_URL$ASSET_PATH")
           echo "$ASSET" | grep -q "4N BUILD TO DEPLOY OK"
 
