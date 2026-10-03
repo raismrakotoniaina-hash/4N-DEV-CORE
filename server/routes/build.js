@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.use(requireApiKey("coding"));
 
-router.post("/builds", (req, res) => {
+router.post("/builds", async (req, res) => {
   try {
     const projectId = typeof req.body?.projectId === "string"
       ? req.body.projectId.trim()
@@ -30,7 +30,7 @@ router.post("/builds", (req, res) => {
     }
 
     const files = listFiles(req.apiKey.id, projectId);
-    const build = buildProject(req.apiKey.id, project, files);
+    const build = await buildProject(req.apiKey.id, project, files);
 
     return res.status(201).json({
       success: true,
