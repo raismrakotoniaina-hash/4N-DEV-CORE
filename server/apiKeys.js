@@ -1,57 +1,32 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+import { query, isDatabaseConfigured } from "./db.js";
 
-const dataDir = path.resolve("data");
-const storePath = path.join(dataDir, "api-keys.json");
+function mapRow(row) {
+  if (!row) return null;
 
-function ensureStore() {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(storePath)) {
-    fs.writeFileSync(storePath, "[]", "utf8");
-  }
-}
-
-function readKeys() {
-  ensureStore();
-  return JSON.parse(fs.readFileSync(storePath, "utf8"));
-}
-
-function writeKeys(keys) {
-  ensureStore();
-  fs.writeFileSync(storePath, JSON.stringify(keys, null, 2), "utf8");
-}
-
-export function createApiKey({
-  name = "Developer",
-  scopes = ["chat"],
-  planId = "free"
-} = {}) {
-  const secret = crypto.randomBytes(32).toString("base64url");
-  const key = `4ndev_sk_live_${secret}`;
-  const hash = crypto.createHash("sha256").update(key).digest("hex");
-
-  const record = {
-    id: crypto.randomUUID(),
-    name,
-    planId,
-    prefix: key.slice(0, 20),
-    hash,
-    scopes,
-    active: true,
-    createdAt: new Date().toISOString()
+  return {
+    id: row.id,
+    name: row.name,
+    planId: row.plan_id,
+    prefix: row.prefix,
+    hash: row.hash,
+    scopes: Array.isArray(row.scopes) ? row.scopes : [],
+    active: row.active,
+    createdAt: row.created_at instanceof Date
+      ? row.created_at.toISOString()
+      : row.created_at,
+    ...(row.updated_at
+      ? {
+          updatedAt:
+            row.updated_at instanceof Date
+              ? row.updated_at.toISOString()
+              : row.updated_at
+        }
+      : {})
   };
-
-  const keys = readKeys();
-  keys.push(record);
-  writeKeys(keys);
-
-  return { ...record, key };
 }
 
-export function authenticateApiKey(key) {
-  if (!key || !key.startsWith("4ndev_sk_")) return null;
-
+function bootstrapApiKey(key) {
   const bootstrapKey = process.env.CORE_API_KEY;
 
   if (bootstrapKey && key === bootstrapKey) {
@@ -66,52 +41,100 @@ export function authenticateApiKey(key) {
     };
   }
 
+  return null;
+}
+
+export async function createApiKey({
+  name = "Developer",
+  scopes = ["chat"],
+  planId = "free"
+} = {}) {
+  if (!isDatabaseConfigured()) {
+    throw new Error("DATABASE_URL is required for API key storage");
+  }
+
+  const secret = crypto.randomBytes(32).toString("base64url");
+  const key = `4ndev_sk_live_${secret}`;
   const hash = crypto.createHash("sha256").update(key).digest("hex");
-  const record = readKeys().find(
-    (item) => item.hash === hash && item.active
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  const result = await query(
+    `INSERT INTO api_keys
+      (id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, TRUE, $7, $7)
+     RETURNING id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at`,
+    [id, name, planId, key.slice(0, 20), hash, JSON.stringify(scopes), now]
   );
 
-  return record || null;
+  return { ...mapRow(result.rows[0]), key };
 }
 
-export function listApiKeys(apiKeyId = null) {
-  const keys = readKeys().filter((item) => item.id !== "core-bootstrap-key");
-  return apiKeyId ? keys.filter((item) => item.id === apiKeyId) : keys;
-}
+export async function authenticateApiKey(key) {
+  if (!key || !key.startsWith("4ndev_sk_")) return null;
 
-export function setApiKeyActive(apiKeyId, active) {
-  if (!apiKeyId || typeof active !== "boolean") return null;
+  const bootstrap = bootstrapApiKey(key);
+  if (bootstrap) return bootstrap;
 
-  const keys = readKeys();
-  const index = keys.findIndex((item) => item.id === apiKeyId);
-  if (index === -1) return null;
+  if (!isDatabaseConfigured()) return null;
 
-  keys[index] = {
-    ...keys[index],
-    active,
-    updatedAt: new Date().toISOString()
-  };
-
-  writeKeys(keys);
-  return keys[index];
-}
-
-export function updateApiKeyPlan(apiKeyId, planId) {
-  if (!apiKeyId || !planId) return null;
-
-  const keys = readKeys();
-  const index = keys.findIndex(
-    (item) => item.id === apiKeyId && item.active
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
+  const result = await query(
+    `SELECT id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at
+     FROM api_keys
+     WHERE hash = $1 AND active = TRUE
+     LIMIT 1`,
+    [hash]
   );
 
-  if (index === -1) return null;
+  return mapRow(result.rows[0]);
+}
 
-  keys[index] = {
-    ...keys[index],
-    planId,
-    updatedAt: new Date().toISOString()
-  };
+export async function listApiKeys(apiKeyId = null) {
+  if (!isDatabaseConfigured()) return [];
 
-  writeKeys(keys);
-  return keys[index];
+  const params = [];
+  let sql = `SELECT id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at
+              FROM api_keys
+              WHERE active = TRUE`;
+
+  if (apiKeyId) {
+    params.push(apiKeyId);
+    sql += " AND id = $1";
+  }
+
+  sql += " ORDER BY created_at DESC";
+
+  const result = await query(sql, params);
+  return result.rows.map(mapRow);
+}
+
+export async function setApiKeyActive(apiKeyId, active) {
+  if (!apiKeyId || typeof active !== "boolean" || !isDatabaseConfigured()) {
+    return null;
+  }
+
+  const result = await query(
+    `UPDATE api_keys
+     SET active = $1, updated_at = $2
+     WHERE id = $3
+     RETURNING id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at`,
+    [active, new Date(), apiKeyId]
+  );
+
+  return mapRow(result.rows[0]);
+}
+
+export async function updateApiKeyPlan(apiKeyId, planId) {
+  if (!apiKeyId || !planId || !isDatabaseConfigured()) return null;
+
+  const result = await query(
+    `UPDATE api_keys
+     SET plan_id = $1, updated_at = $2
+     WHERE id = $3 AND active = TRUE
+     RETURNING id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at`,
+    [planId, new Date(), apiKeyId]
+  );
+
+  return mapRow(result.rows[0]);
 }
