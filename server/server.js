@@ -19,6 +19,7 @@ import builderRouter from "./routes/builder.js";
 import billingRouter from "./routes/billing.js";
 import usageRouter from "./routes/usage.js";
 import hostingRouter from "./routes/hosting.js";
+import buildRouter from "./routes/build.js";
 import sitesRouter from "./routes/sites.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
@@ -59,7 +60,7 @@ app.get("/v1", (_req, res) => {
   res.json({
     name: "4N DEV API",
     version: "v1",
-    endpoints: ["/v1/chat", "/v1/coding", "/v1/image", "/v1/credits", "/v1/plans", "/v1/credit-policy", "/v1/embeddings", "/v1/projects", "/v1/files", "/v1/hosting/deployments"]
+    endpoints: ["/v1/chat", "/v1/coding", "/v1/image", "/v1/credits", "/v1/plans", "/v1/credit-policy", "/v1/embeddings", "/v1/projects", "/v1/files", "/v1/hosting/deployments", "/v1/builds"]
   });
 });
 
@@ -156,6 +157,7 @@ app.use("/v1/projects", projectsRouter);
 app.use("/v1", filesRouter);
 app.use("/v1", builderRouter);
 app.use("/v1/hosting", hostingRouter);
+app.use("/v1", buildRouter);
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`4N DEV Core API running on port ${PORT}`);
