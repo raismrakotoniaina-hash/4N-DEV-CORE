@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { query } from "./db.js";
-import { ensureDeploymentsTable } from "./deploymentsDb.js";
 
 function makeSlug(name, projectId) {
   const base = String(name || "site")
@@ -22,9 +21,8 @@ function mapRow(row) {
 }
 
 export async function createDeployment(apiKeyId, project, files) {
-  await ensureDeploymentsTable();
   const existingResult = await query(
-    \`SELECT * FROM deployments WHERE api_key_id = $1 AND project_id = $2 LIMIT 1\`,
+    `SELECT * FROM deployments WHERE api_key_id = $1 AND project_id = $2 LIMIT 1`,
     [apiKeyId, project.id]
   );
   const existing = existingResult.rows[0] || null;
@@ -47,7 +45,7 @@ export async function createDeployment(apiKeyId, project, files) {
   };
 
   const result = await query(
-    \`INSERT INTO deployments
+    `INSERT INTO deployments
       (id, api_key_id, project_id, project_name, slug, status, version, files, history, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11)
      ON CONFLICT (id) DO UPDATE SET
@@ -55,7 +53,7 @@ export async function createDeployment(apiKeyId, project, files) {
        status = EXCLUDED.status, version = EXCLUDED.version,
        files = EXCLUDED.files, history = EXCLUDED.history,
        updated_at = EXCLUDED.updated_at
-     RETURNING *\`,
+     RETURNING *`,
     [deployment.id, apiKeyId, project.id, project.name, slug, "deployed",
      version, JSON.stringify(deployment.files), JSON.stringify(history),
      deployment.createdAt, now]
@@ -64,12 +62,11 @@ export async function createDeployment(apiKeyId, project, files) {
 }
 
 export async function listDeployments(apiKeyId) {
-  await ensureDeploymentsTable();
   const result = await query(
-    \`SELECT id, api_key_id, project_id, project_name, slug, status,
+    `SELECT id, api_key_id, project_id, project_name, slug, status,
             version, jsonb_array_length(files) AS file_count,
             created_at, updated_at
-     FROM deployments WHERE api_key_id = $1 ORDER BY updated_at DESC\`,
+     FROM deployments WHERE api_key_id = $1 ORDER BY updated_at DESC`,
     [apiKeyId]
   );
   return result.rows.map(row => ({
@@ -82,18 +79,16 @@ export async function listDeployments(apiKeyId) {
 }
 
 export async function getDeployment(apiKeyId, deploymentId) {
-  await ensureDeploymentsTable();
   const result = await query(
-    \`SELECT * FROM deployments WHERE id = $1 AND api_key_id = $2 LIMIT 1\`,
+    `SELECT * FROM deployments WHERE id = $1 AND api_key_id = $2 LIMIT 1`,
     [deploymentId, apiKeyId]
   );
   return result.rows[0] ? mapRow(result.rows[0]) : null;
 }
 
 export async function getPublicDeployment(slug) {
-  await ensureDeploymentsTable();
   const result = await query(
-    \`SELECT * FROM deployments WHERE slug = $1 AND status = 'deployed' LIMIT 1\`,
+    `SELECT * FROM deployments WHERE slug = $1 AND status = 'deployed' LIMIT 1`,
     [slug]
   );
   return result.rows[0] ? mapRow(result.rows[0]) : null;
@@ -101,7 +96,7 @@ export async function getPublicDeployment(slug) {
 
 export function findDeploymentFile(deployment, requestedPath) {
   const normalized = String(requestedPath || "")
-    .replaceAll("\\\\", "/").replace(/^\\/+/, "").replace(/\\/+/g, "/");
+    .replaceAll("\\", "/").replace(/^\/+/, "").replace(/\/+/g, "/");
   if (!normalized || normalized.endsWith("/")) {
     return deployment.files.find(file => file.path === "index.html") || null;
   }
@@ -110,9 +105,8 @@ export function findDeploymentFile(deployment, requestedPath) {
 }
 
 export async function deleteDeployment(apiKeyId, deploymentId) {
-  await ensureDeploymentsTable();
   const result = await query(
-    \`DELETE FROM deployments WHERE id = $1 AND api_key_id = $2 RETURNING id\`,
+    `DELETE FROM deployments WHERE id = $1 AND api_key_id = $2 RETURNING id`,
     [deploymentId, apiKeyId]
   );
   return result.rowCount > 0;
@@ -145,11 +139,11 @@ export async function rollbackDeployment(apiKeyId, deploymentId, version) {
   ];
 
   const result = await query(
-    \`UPDATE deployments
+    `UPDATE deployments
      SET files = $1::jsonb, version = $2, status = 'deployed',
          updated_at = $3, history = $4::jsonb
      WHERE id = $5 AND api_key_id = $6
-     RETURNING *\`,
+     RETURNING *`,
     [JSON.stringify(target.files), (deployment.version || 1) + 1, now,
      JSON.stringify(history), deploymentId, apiKeyId]
   );
