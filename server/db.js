@@ -107,6 +107,27 @@ export async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ
     );
+
+    CREATE TABLE IF NOT EXISTS builds (
+      id UUID PRIMARY KEY,
+      api_key_id TEXT NOT NULL,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      project_name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      entrypoint TEXT NOT NULL,
+      files JSONB NOT NULL,
+      file_count INTEGER NOT NULL,
+      total_characters INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_builds_api_key
+      ON builds(api_key_id);
+
+    CREATE INDEX IF NOT EXISTS idx_builds_project
+      ON builds(project_id);
   `);
 
   return true;
