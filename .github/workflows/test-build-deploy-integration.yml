@@ -1,0 +1,47 @@
+name: Test Build Deploy Integration
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/test-build-deploy-integration.yml"
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: https://fourn-dev-core.onrender.com
+      CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+    steps:
+      - name: Build and deploy Vite project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "== Create project =="
+          PROJECT=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"name":"Build Deploy Integration Test","description":"Build to deploy integration"}')
+          PROJECT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])' <<<"$PROJECT")
+
+          echo "== Add package.json =="
+          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"package.json","content":"{\"name\":\"4n-build-deploy-test\",\"private\":true,\"version\":\"1.0.0\",\"scripts\":{\"build\":\"vite build\"},\"dependencies\":{\"vite\":\"^7.1.7\"}}"}' >/tmp/package.json
+
+          echo "== Add index.html =="
+          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"index.html","content":"<!doctype html><html><head><meta charset=\"UTF-8\"><title>4N Build Deploy</title></head><body><div id=\"app\"></div><script type=\"module\" src=\"/src/main.js\"></script></body></html>"}' >/tmp/index.json
+
+          echo "== Add src/main.js =="
+          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"src/main.js","content":"document.querySelector(\"#app\").textContent = \"4N BUILD TO DEPLOY OK\";"}' >/tmp/main.json
+
+          echo "== Build =="
+          BUILD=$(curl -fsS -X POST "$BASE_URL/v1/builds"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"projectId":"'"$PROJECT_ID"'"}')
+          BUILD_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["build"]["id"])' <<<"$BUILD")
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["status"]=="built"; assert d["build"]["type"]=="vite"' <<<"$BUILD"
+
+          echo "== Deploy built output =="
+          DEPLOY=$(curl -fsS -X POST "$BASE_URL/v1/hosting/deployments"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"projectId":"'"$PROJECT_ID"'","buildId":"'"$BUILD_ID"'"}')
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["deployment"]["status"]=="deployed"; assert d["deployment"]["buildId"]=="'"$BUILD_ID"'"; print(d["deployment"]["url"])' <<<"$DEPLOY" > /tmp/site_path
+          SITE_PATH=$(cat /tmp/site_path)
+
+          echo "== Verify public site =="
+          curl -fsS "$BASE_URL$SITE_PATH" | grep -q "4N BUILD TO DEPLOY OK"
+
+          echo "BUILD TO DEPLOY INTEGRATION TEST PASSED"
