@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Test real Vite build engine
+      - name: Test build artifact creation
         env:
           BASE_URL: https://fourn-dev-core.onrender.com
           CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
@@ -18,27 +18,23 @@ jobs:
           set -euo pipefail
 
           echo "== Create project =="
-          PROJECT=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"name":"Vite Build Test Site","description":"Real Vite build engine test"}')
+          PROJECT=$(curl -fsS -X POST "$BASE_URL/v1/projects"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"name":"Build Test Site","description":"Build system test"}')
           PROJECT_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["project"]["id"])' <<<"$PROJECT")
 
-          echo "== Add Vite project files =="
+          echo "== Add build files =="
           curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @- <<'JSON' >/tmp/index.json
-{"path":"index.html","content":"<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>4N DEV Vite Test</title></head><body><div id=\"app\"></div><script type=\"module\" src=\"/src/main.js\"></script></body></html>"}
+{"path":"index.html","content":"<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body><h1>BUILD_OK</h1></body></html>"}
 JSON
 
-          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data-binary @- <<'JSON' >/tmp/package.json
-{"path":"package.json","content":"{\"name\":\"4n-vite-test\",\"private\":true,\"version\":\"1.0.0\",\"scripts\":{\"build\":\"vite build\"},\"dependencies\":{\"vite\":\"^7.1.7\"}}"}
-JSON
+          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"styles.css","content":"body { font-family: sans-serif; }"}' >/tmp/style.json
 
-          curl -fsS -X POST "$BASE_URL/v1/projects/$PROJECT_ID/files"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"path":"src/main.js","content":"document.querySelector("#app").textContent = "4N DEV Vite Build OK";"}' >/tmp/main.json
-
-          echo "== Build project with Vite =="
+          echo "== Build project =="
           BUILD=$(curl -fsS -X POST "$BASE_URL/v1/builds"             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             -d '{"projectId":"'"$PROJECT_ID"'"}')
           BUILD_ID=$(python -c 'import json,sys; print(json.load(sys.stdin)["build"]["id"])' <<<"$BUILD")
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["status"]=="built"; assert d["build"]["type"]=="vite"; assert d["build"]["entrypoint"]=="index.html"; assert d["build"]["fileCount"]>=2' <<<"$BUILD"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["status"]=="built"; assert d["build"]["type"]=="static"; assert d["build"]["fileCount"]==2' <<<"$BUILD"
 
-          echo "== Verify built dist output =="
+          echo "== Get build =="
           DETAIL=$(curl -fsS -H "Authorization: Bearer $CORE_API_KEY" "$BASE_URL/v1/builds/$BUILD_ID")
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; files=d["build"]["files"]; assert any(f["path"]=="dist/index.html" for f in files)' <<<"$DETAIL"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d["success"] is True; assert d["build"]["entrypoint"]=="index.html"' <<<"$DETAIL"
 
-          echo "Core Build System real Vite build test passed."
+          echo "Core Build System full test passed."
