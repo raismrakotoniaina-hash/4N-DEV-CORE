@@ -1,0 +1,11 @@
+name: Core Build System
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Registration check
+        run: echo "Core Build System registered"
