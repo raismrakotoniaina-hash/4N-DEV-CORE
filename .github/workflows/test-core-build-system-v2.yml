@@ -2,9 +2,6 @@ name: Core Build System
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/test-core-build-system-v2.yml'
 
 jobs:
   build:
