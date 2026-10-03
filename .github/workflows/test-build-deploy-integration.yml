@@ -42,12 +42,12 @@ jobs:
           SITE_PATH=$(cat /tmp/site_path)
 
           echo "== Verify public site entrypoint =="
-          HTML=$(curl -fsS "$BASE_URL$SITE_PATH")
+          SITE_URL="$BASE_URL${SITE_PATH%/}/"\n          HTML=$(curl -fsS "$SITE_URL")
           echo "$HTML" | grep -q "<title>4N Build Deploy</title>"
 
           echo "== Verify built JavaScript asset =="
           ASSET_PATH=$(printf '%s' "$HTML" | grep -o 'src="[^"]*"' | head -n 1 | cut -d'"' -f2)
-          ASSET=$(curl -fsS "$BASE_URL$ASSET_PATH")
+          ASSET=$(curl -fsS "${SITE_URL}${ASSET_PATH#./}")
           echo "$ASSET" | grep -q "4N BUILD TO DEPLOY OK"
 
           echo "BUILD TO DEPLOY INTEGRATION TEST PASSED"
