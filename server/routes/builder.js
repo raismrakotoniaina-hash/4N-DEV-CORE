@@ -102,7 +102,7 @@ router.post("/builder/plan", requireApiKey("coding"), requirePlanFeature("coding
       });
     }
 
-    const balance = getBalance(req.apiKey.id);
+    const balance = await getBalance(req.apiKey.id);
     if (balance < PLANNER_COST) {
       return res.status(402).json({
         success: false,
@@ -113,18 +113,18 @@ router.post("/builder/plan", requireApiKey("coding"), requirePlanFeature("coding
     }
 
     const result = await generateBuilderPlan({ prompt });
-    const remaining = spendCredits(req.apiKey.id, PLANNER_COST, "builder_planner");
+    const remaining = await spendCredits(req.apiKey.id, PLANNER_COST, "builder_planner");
 
     if (remaining === null) {
       return res.status(402).json({
         success: false,
         error: "Insufficient 4N DEV credits",
-        credits: getBalance(req.apiKey.id),
+        credits: await getBalance(req.apiKey.id),
         credits_required: PLANNER_COST
       });
     }
 
-    recordUsage({
+    await recordUsage({
       apiKeyId: req.apiKey.id,
       endpoint: "/v1/builder/plan",
       usage: { ...result.usage, credits_used: PLANNER_COST, credits_remaining: remaining }
@@ -190,7 +190,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
 
     let project = null;
     if (projectId) {
-      project = getProject(req.apiKey.id, projectId);
+      project = await getProject(req.apiKey.id, projectId);
       if (!project) {
         return res.status(404).json({ success: false, error: "Project not found" });
       }
@@ -286,26 +286,26 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
           ? result.name.trim().slice(0, 120)
           : "AI Builder Project");
 
-      project = createProject(req.apiKey.id, name, typeof result.description === "string" ? result.description.slice(0, 2000) : "");
+      project = await createProject(req.apiKey.id, name, typeof result.description === "string" ? result.description.slice(0, 2000) : "");
     }
 
     // Validate credit availability again immediately before persistence.
     // This prevents a stale balance check from allowing a build without credits.
-    const balanceAfter = spendCredits(req.apiKey.id, BUILDER_COST, "builder_usage");
+    const balanceAfter = await spendCredits(req.apiKey.id, BUILDER_COST, "builder_usage");
     if (balanceAfter === null) {
       return res.status(402).json({
         success: false,
         error: "Insufficient 4N DEV credits",
-        credits: getBalance(req.apiKey.id),
+        credits: await getBalance(req.apiKey.id),
         credits_required: BUILDER_COST
       });
     }
 
     let savedFiles;
     try {
-      savedFiles = finalFiles.map(file =>
+      savedFiles = await Promise.all(finalFiles.map(file =>
         upsertFile(req.apiKey.id, project.id, file.path, file.content)
-      );
+      ));
     } catch (error) {
       console.error("4N DEV Builder persistence error:", error.message);
       return res.status(500).json({
@@ -316,7 +316,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
 
     let deployment;
     try {
-      deployment = createDeployment(req.apiKey.id, project, savedFiles);
+      deployment = await createDeployment(req.apiKey.id, project, savedFiles);
     } catch (error) {
       console.error("4N DEV Builder deployment error:", error.message);
       return res.status(500).json({
@@ -329,7 +329,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
-    recordUsage({
+    await recordUsage({
       apiKeyId: req.apiKey.id,
       endpoint: "/v1/builder",
       usage: {
