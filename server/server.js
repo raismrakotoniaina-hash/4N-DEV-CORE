@@ -24,12 +24,38 @@ import sitesRouter from "./routes/sites.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
 import { checkDatabase, initializeDatabase } from "./db.js";
+import { createRequestId, logError, logInfo, logRequest, sanitizeError } from "./logger.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 
+app.disable("x-powered-by");
+
 app.use(helmet());
 app.use(cors());
+
+app.use((req, res, next) => {
+  const requestId = req.get("x-request-id") || createRequestId();
+  req.requestId = requestId;
+  res.setHeader("x-request-id", requestId);
+
+  const startedAt = process.hrtime.bigint();
+
+  res.on("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    logRequest({
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Math.round(durationMs * 100) / 100,
+      userAgent: req.get("user-agent") || undefined
+    });
+  });
+
+  next();
+});
+
 app.use(express.json({
   limit: "2mb",
   verify: (req, _res, buffer) => {
@@ -74,7 +100,10 @@ app.get("/health/db", async (_req, res) => {
       database: "connected"
     });
   } catch (error) {
-    console.error("Database health check failed:", error);
+    logError("database_health_check_failed", {
+      requestId: _req.requestId,
+      error: sanitizeError(error)
+    });
     return res.status(503).json({
       success: false,
       status: "unavailable",
@@ -198,20 +227,44 @@ app.use("/v1", builderRouter);
 app.use("/v1/hosting", hostingRouter);
 app.use("/v1", buildRouter);
 
+app.use((err, req, res, _next) => {
+  const status = Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode < 600
+    ? err.statusCode
+    : 500;
+
+  logError("request_failed", {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.originalUrl,
+    status,
+    error: sanitizeError(err)
+  });
+
+  if (res.headersSent) {
+    return;
+  }
+
+  res.status(status).json({
+    success: false,
+    error: status >= 500 ? "Internal server error" : (err.message || "Request failed"),
+    requestId: req.requestId
+  });
+});
+
 async function startServer() {
   try {
     if (process.env.DATABASE_URL) {
       await initializeDatabase();
-      console.log("PostgreSQL database initialized");
+      logInfo("postgresql_database_initialized");
     } else {
-      console.log("PostgreSQL not configured; using local development storage");
+      logInfo("postgresql_not_configured_using_local_development_storage");
     }
 
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`4N DEV Core API running on port ${PORT}`);
+      logInfo("server_started", { port: PORT, environment: process.env.NODE_ENV || "development" });
     });
   } catch (error) {
-    console.error("Database initialization failed:", error);
+    logError("database_initialization_failed", { error: sanitizeError(error) });
     process.exit(1);
   }
 }
