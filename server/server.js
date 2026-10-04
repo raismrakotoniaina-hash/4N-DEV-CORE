@@ -83,7 +83,7 @@ app.get("/health", (_req, res) => {
   res.json({ success: true, name: "4N DEV Core API", status: "online", version: "0.1.0" });
 });
 
-app.get("/health/db", async (_req, res) => {
+app.get("/health/db", async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({
       success: false,
@@ -101,13 +101,53 @@ app.get("/health/db", async (_req, res) => {
     });
   } catch (error) {
     logError("database_health_check_failed", {
-      requestId: _req.requestId,
+      requestId: req.requestId,
       error: sanitizeError(error)
     });
     return res.status(503).json({
       success: false,
       status: "unavailable",
       database: "disconnected"
+    });
+  }
+});
+
+app.get("/health/ready", async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({
+      success: false,
+      status: "not_ready",
+      checks: {
+        database: "not_configured"
+      },
+      requestId: req.requestId
+    });
+  }
+
+  try {
+    await checkDatabase();
+
+    return res.json({
+      success: true,
+      status: "ready",
+      checks: {
+        database: "connected"
+      },
+      requestId: req.requestId
+    });
+  } catch (error) {
+    logError("readiness_check_failed", {
+      requestId: req.requestId,
+      error: sanitizeError(error)
+    });
+
+    return res.status(503).json({
+      success: false,
+      status: "not_ready",
+      checks: {
+        database: "disconnected"
+      },
+      requestId: req.requestId
     });
   }
 });
