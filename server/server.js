@@ -23,7 +23,7 @@ import buildRouter from "./routes/build.js";
 import sitesRouter from "./routes/sites.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
-import { checkDatabase, initializeDatabase } from "./db.js";
+import { checkDatabase, initializeDatabase, closeDatabase } from "./db.js";
 import { createRequestId, logError, logInfo, logRequest, sanitizeError } from "./logger.js";
 
 const app = express();
@@ -249,7 +249,6 @@ app.get("/v1/me", requireApiKey(), async (req, res, next) => {
   }
 });
 
-// Billing routes MUST be registered before generic /v1 routers.
 app.use("/v1/billing", billingRouter);
 app.use("/sites", sitesRouter);
 app.use("/v1", apiRateLimit);
@@ -300,9 +299,39 @@ async function startServer() {
       logInfo("postgresql_not_configured_using_local_development_storage");
     }
 
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       logInfo("server_started", { port: PORT, environment: process.env.NODE_ENV || "development" });
     });
+
+    let shuttingDown = false;
+
+    const shutdown = async (signal) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+
+      logInfo("server_shutdown_started", { signal });
+
+      const forceExitTimer = setTimeout(() => {
+        logError("server_shutdown_timeout");
+        process.exit(1);
+      }, 15000);
+
+      forceExitTimer.unref();
+
+      server.close(async () => {
+        try {
+          await closeDatabase();
+          logInfo("server_shutdown_completed");
+          process.exit(0);
+        } catch (error) {
+          logError("server_shutdown_failed", { error: sanitizeError(error) });
+          process.exit(1);
+        }
+      });
+    };
+
+    process.once("SIGTERM", () => void shutdown("SIGTERM"));
+    process.once("SIGINT", () => void shutdown("SIGINT"));
   } catch (error) {
     logError("database_initialization_failed", { error: sanitizeError(error) });
     process.exit(1);
