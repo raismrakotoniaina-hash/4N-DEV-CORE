@@ -120,6 +120,44 @@ export async function spendCredits(apiKeyId, amount, reason = "api_usage") {
   }
 }
 
+export async function refundCredits(apiKeyId, amount, reason = "operation_refund") {
+  validateAmount(amount);
+
+  if (!isDatabaseConfigured()) {
+    throw new Error("DATABASE_URL is required for credit storage");
+  }
+
+  const now = new Date();
+  const client = await (await import("./db.js")).getDb().connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const result = await client.query(
+      "UPDATE credit_accounts SET balance = balance + $1, updated_at = $2 WHERE api_key_id = $3 RETURNING balance",
+      [amount, now, apiKeyId]
+    );
+
+    if (!result.rows[0]) {
+      await client.query("ROLLBACK");
+      throw new Error("Credit account not found for refund");
+    }
+
+    await client.query(
+      "INSERT INTO credit_transactions (id, api_key_id, type, amount, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [crypto.randomUUID(), apiKeyId, "refund", amount, reason, now]
+    );
+
+    await client.query("COMMIT");
+    return Number(result.rows[0].balance);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export function calculateChatCredits(usage = {}) {
   const input = Number(usage.input_tokens || 0);
   const output = Number(usage.output_tokens || 0);
