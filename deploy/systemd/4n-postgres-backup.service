@@ -6,4 +6,5 @@ Requires=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/4n-dev-core
+EnvironmentFile=-/etc/4n-dev-core/backup.env
 ExecStart=/bin/sh -c '/opt/4n-dev-core/scripts/backup-postgres.sh && /opt/4n-dev-core/scripts/upload-postgres-backup.sh'
