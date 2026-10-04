@@ -349,6 +349,12 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
 
     let deployment;
     try {
+      if (process.env.NODE_ENV === "test" && process.env.BUILDER_TEST_FORCE_DEPLOYMENT_FAILURE === "true") {
+        const forcedFailure = new Error("Forced Builder deployment failure for recovery testing");
+        forcedFailure.statusCode = 500;
+        throw forcedFailure;
+      }
+
       deployment = await createDeployment(req.apiKey.id, project, build.files);
     } catch (error) {
       console.error("4N DEV Builder deployment error:", error.message);
