@@ -1,0 +1,12 @@
+[Unit]
+Description=Run 4N DEV Core production health alert check
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+RandomizedDelaySec=2min
+Unit=4n-production-alert.service
+
+[Install]
+WantedBy=timers.target
