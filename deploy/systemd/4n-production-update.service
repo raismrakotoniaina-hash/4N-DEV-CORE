@@ -1,0 +1,11 @@
+[Unit]
+Description=4N DEV Core safe production update
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/4n-dev-core
+EnvironmentFile=-/etc/4n-dev-core/update.env
+ExecStart=/bin/sh /opt/4n-dev-core/scripts/update-production.sh
