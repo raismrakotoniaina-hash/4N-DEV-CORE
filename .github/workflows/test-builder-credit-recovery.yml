@@ -86,6 +86,8 @@ jobs:
           echo "Builder HTTP status: $RESPONSE"
           cat builder-response.json
 
+          export RESPONSE_STATUS="$RESPONSE"
+
           node - <<'NODE'
           const fs = require("fs");
           const status = Number(process.env.RESPONSE_STATUS || "0");
