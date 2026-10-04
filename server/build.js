@@ -6,26 +6,12 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
-const dataDir = path.join(process.cwd(), "data");
-const filePath = path.join(dataDir, "builds.json");
 const MAX_FILES = 100;
 const MAX_FILE_CHARS = 200000;
 const MAX_TOTAL_CHARS = 1000000;
 const BUILD_TIMEOUT_MS = 120000;
 const ALLOWED_BUILD_DEPENDENCIES = new Set(["react","react-dom","vite","@vitejs/plugin-react","@vitejs/plugin-react-swc","typescript","lucide-react"]);
 
-function ensureStore() {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, "[]", "utf8");
-}
-function readBuilds() {
-  ensureStore();
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-function writeBuilds(builds) {
-  ensureStore();
-  fs.writeFileSync(filePath, JSON.stringify(builds, null, 2), "utf8");
-}
 function validateFiles(files) {
   const validFiles = files.filter(file =>
     file && typeof file.path === "string" && typeof file.content === "string" &&
