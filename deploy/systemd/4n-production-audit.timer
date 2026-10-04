@@ -1,0 +1,11 @@
+[Unit]
+Description=Run 4N DEV Core daily production audit
+
+[Timer]
+OnCalendar=*-*-* 05:00:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=4n-production-audit.service
+
+[Install]
+WantedBy=timers.target
