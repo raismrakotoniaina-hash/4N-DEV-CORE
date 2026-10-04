@@ -28,22 +28,12 @@ install_unit() {
   install -m 0644 "$SYSTEMD_DIR/$name" "$TARGET_DIR/$name"
 }
 
-echo "Installing 4N DEV Core production timers..."
+echo "Installing 4N DEV Core production services and timers..."
 
-install_unit "4n-production-update.service"
-install_unit "4n-production-update.timer"
-install_unit "4n-certbot-renew.service"
-install_unit "4n-certbot-renew.timer"
-install_unit "4n-postgres-backup.service"
-install_unit "4n-postgres-backup.timer"
-install_unit "4n-backup-monitor.service"
-install_unit "4n-backup-monitor.timer"
-install_unit "4n-disk-monitor.service"
-install_unit "4n-disk-monitor.timer"
-install_unit "4n-docker-health-monitor.service"
-install_unit "4n-docker-health-monitor.timer"
-install_unit "4n-docker-update.service"
-install_unit "4n-docker-update.timer"
+for unit in   4n-production-update.service   4n-production-update.timer   4n-production-alert.service   4n-production-alert.timer   4n-production-audit.service   4n-production-audit.timer   4n-certbot-renew.service   4n-certbot-renew.timer   4n-postgres-backup.service   4n-postgres-backup.timer   4n-backup-monitor.service   4n-backup-monitor.timer   4n-disk-monitor.service   4n-disk-monitor.timer   4n-docker-health-monitor.service   4n-docker-health-monitor.timer   4n-docker-update.service   4n-docker-update.timer
+do
+  install_unit "$unit"
+done
 
 if [ ! -f "$CONFIG_DIR/update.env" ]; then
   cat > "$CONFIG_DIR/update.env" <<'EOF'
@@ -54,21 +44,23 @@ EOF
   chmod 600 "$CONFIG_DIR/update.env"
 fi
 
+if [ ! -f "$CONFIG_DIR/monitoring.env" ]; then
+  cat > "$CONFIG_DIR/monitoring.env" <<'EOF'
+# Optional production monitoring settings
+# HEALTH_ALERT_EMAIL=
+# HEALTH_ALERT_COOLDOWN=3600
+EOF
+  chmod 600 "$CONFIG_DIR/monitoring.env"
+fi
+
 systemctl daemon-reload
 
-for timer in \
-  4n-production-update.timer \
-  4n-certbot-renew.timer \
-  4n-postgres-backup.timer \
-  4n-backup-monitor.timer \
-  4n-disk-monitor.timer \
-  4n-docker-health-monitor.timer \
-  4n-docker-update.timer
+for timer in   4n-production-update.timer   4n-production-alert.timer   4n-production-audit.timer   4n-certbot-renew.timer   4n-postgres-backup.timer   4n-backup-monitor.timer   4n-disk-monitor.timer   4n-docker-health-monitor.timer   4n-docker-update.timer
 do
   systemctl enable --now "$timer"
 done
 
 echo ""
-echo "Production timers installed and enabled."
+echo "Production automation installed and enabled."
 echo ""
-systemctl list-timers --all | grep -E '4n-(production-update|certbot-renew|postgres-backup|backup-monitor|disk-monitor|docker-health-monitor|docker-update)' || true
+systemctl list-timers --all | grep -E '4n-(production-update|production-alert|production-audit|certbot-renew|postgres-backup|backup-monitor|disk-monitor|docker-health-monitor|docker-update)' || true
