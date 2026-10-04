@@ -55,6 +55,15 @@ services:
     networks:
       - 4n-network
 
+  certbot:
+    image: certbot/certbot:latest
+    container_name: 4n-certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    networks:
+      - 4n-network
+
 volumes:
   postgres_data:
   certbot_www:
