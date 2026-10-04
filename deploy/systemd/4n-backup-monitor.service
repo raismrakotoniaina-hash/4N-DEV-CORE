@@ -1,5 +1,5 @@
 [Unit]
-Description=4N DEV Core PostgreSQL backup verification
+Description=4N DEV Core PostgreSQL backup restore verification
 After=docker.service
 Requires=docker.service
 
@@ -7,4 +7,4 @@ Requires=docker.service
 Type=oneshot
 WorkingDirectory=/opt/4n-dev-core
 EnvironmentFile=-/etc/4n-dev-core/backup.env
-ExecStart=/opt/4n-dev-core/scripts/check-backup-status.sh
+ExecStart=/bin/sh /opt/4n-dev-core/scripts/verify-latest-postgres-backup.sh
