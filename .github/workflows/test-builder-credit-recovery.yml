@@ -1,0 +1,134 @@
+name: Test Builder Credit Recovery
+
+on:
+  workflow_dispatch:
+
+jobs:
+  builder-credit-recovery:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: 4ncore
+          POSTGRES_USER: 4ncore
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U 4ncore -d 4ncore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://4ncore:test-password@127.0.0.1:5432/4ncore
+      CORE_API_KEY: test-core-key
+      CORE_API_KEY_PLAN: pro
+      CORE_API_KEY_INITIAL_CREDITS: 500
+      CORE_ADMIN_SECRET: test-admin-secret
+      AI_PROVIDER: demo
+      NODE_ENV: test
+      BUILDER_TEST_FORCE_DEPLOYMENT_FAILURE: true
+      PORT: 3001
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start Core API
+        run: |
+          nohup npm start > /tmp/4n-core.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3001/health/ready >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3001/health/ready
+
+      - name: Verify credits are refunded after Builder deployment failure
+        run: |
+          set -euo pipefail
+
+          BEFORE=$(curl -fsS             -H "Authorization: Bearer $CORE_API_KEY"             http://127.0.0.1:3001/v1/me)
+
+          echo "$BEFORE" > before.json
+
+          BEFORE_CREDITS=$(node -e '
+            const fs=require("fs");
+            const body=JSON.parse(fs.readFileSync("before.json","utf8"));
+            if (body.success !== true) throw new Error(JSON.stringify(body));
+            console.log(body.developer.credits);
+          ')
+
+          echo "Credits before Builder failure: $BEFORE_CREDITS"
+
+          set +e
+          RESPONSE=$(curl -sS -o builder-response.json -w "%{http_code}"             -X POST http://127.0.0.1:3001/v1/builder             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data '{"prompt":"Create a simple public landing page for 4N DEV with a heading, short description, and responsive styling."}')
+          CURL_EXIT=$?
+          set -e
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            cat /tmp/4n-core.log
+            exit "$CURL_EXIT"
+          fi
+
+          echo "Builder HTTP status: $RESPONSE"
+          cat builder-response.json
+
+          node - <<'NODE'
+          const fs = require("fs");
+          const status = Number(process.env.RESPONSE_STATUS || "0");
+          const body = JSON.parse(fs.readFileSync("builder-response.json", "utf8"));
+
+          if (status !== 500) {
+            throw new Error("Expected Builder deployment failure HTTP 500, got " + status);
+          }
+
+          if (body.success !== false) {
+            throw new Error("Expected Builder failure response");
+          }
+
+          if (body.credits_refunded !== true) {
+            throw new Error("Builder did not confirm credit refund: " + JSON.stringify(body));
+          }
+
+          if (!body.project?.id) {
+            throw new Error("Expected project to exist before forced deployment failure");
+          }
+          NODE
+
+          AFTER=$(curl -fsS             -H "Authorization: Bearer $CORE_API_KEY"             http://127.0.0.1:3001/v1/me)
+
+          echo "$AFTER" > after.json
+
+          AFTER_CREDITS=$(node -e '
+            const fs=require("fs");
+            const body=JSON.parse(fs.readFileSync("after.json","utf8"));
+            if (body.success !== true) throw new Error(JSON.stringify(body));
+            console.log(body.developer.credits);
+          ')
+
+          echo "Credits after Builder failure: $AFTER_CREDITS"
+
+          if [ "$AFTER_CREDITS" -ne "$BEFORE_CREDITS" ]; then
+            echo "ERROR: credits changed after failed Builder operation"
+            cat /tmp/4n-core.log
+            exit 1
+          fi
+
+          echo "PASS: Builder failure restored the exact starting credit balance."
+
+      - name: Print Core logs on failure
+        if: failure()
+        run: cat /tmp/4n-core.log
