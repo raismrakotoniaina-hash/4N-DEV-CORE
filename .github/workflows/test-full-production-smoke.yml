@@ -1,0 +1,127 @@
+name: Test Full Production Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CORE_URL: https://fourn-dev-core.onrender.com
+      CORE_API_KEY: ${{ secrets.CORE_API_KEY }}
+
+    steps:
+      - name: Run full Core smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CORE_API_KEY}" ]; then
+            echo "CORE_API_KEY GitHub secret is required."
+            exit 1
+          fi
+
+          node <<'NODE'
+          const base = process.env.CORE_URL.replace(/\/$/, "");
+          const key = process.env.CORE_API_KEY;
+          const headers = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${key}`
+          };
+
+          async function request(path, options = {}) {
+            const response = await fetch(base + path, {
+              ...options,
+              headers: { ...headers, ...(options.headers || {}) }
+            });
+            const text = await response.text();
+            let data;
+            try { data = JSON.parse(text); } catch { data = { raw: text }; }
+            if (!response.ok) {
+              throw new Error(`${path} -> HTTP ${response.status}: ${JSON.stringify(data)}`);
+            }
+            return data;
+          }
+
+          function assert(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+
+          console.log("1) Health");
+          const health = await request("/health", { headers: {} });
+          assert(health?.success === true, "Health failed");
+
+          console.log("2) Readiness");
+          const ready = await request("/health/ready", { headers: {} });
+          assert(ready?.success === true && ready?.status === "ready", "Readiness failed");
+
+          console.log("3) Credits");
+          const me = await request("/v1/me");
+          assert(Number.isFinite(Number(me?.credits)), "Credits endpoint failed");
+
+          console.log("4) Planner");
+          const planResult = await request("/v1/builder/plan", {
+            method: "POST",
+            body: JSON.stringify({
+              prompt: "Create a small responsive business dashboard for clients and invoices with search and local persistence."
+            })
+          });
+          assert(planResult?.success === true, "Planner failed");
+          assert(planResult?.plan?.project_type, "Planner returned no project type");
+
+          console.log("5) AI Builder + review + automatic real build/deploy");
+          const builder = await request("/v1/builder", {
+            method: "POST",
+            body: JSON.stringify({
+              prompt: "Create a small responsive business dashboard for clients and invoices with search and local persistence.",
+              projectName: "4N Full Smoke Business",
+              plan: planResult.plan
+            })
+          });
+          assert(builder?.success === true, "Builder failed");
+          assert(builder?.project?.id, "Builder returned no project");
+          assert(Array.isArray(builder?.files) && builder.files.some(f => f.path === "index.html"), "Builder returned no index.html");
+          assert(builder?.review?.passed === true, "Builder review did not pass");
+          assert(builder?.build?.id, "Builder did not run the real build engine");
+          assert(builder?.build?.status === "built", "Builder build is not built");
+          assert(builder?.deployment?.id, "Builder did not deploy");
+          assert(builder?.deployment?.url, "Builder returned no deployment URL");
+
+          const projectId = builder.project.id;
+          const deploymentId = builder.deployment.id;
+          const slug = builder.deployment.slug;
+
+          console.log("6) Project files");
+          const files = await request(`/v1/projects/${projectId}/files`);
+          assert(files?.success === true && Array.isArray(files.files), "Project files endpoint failed");
+          assert(files.files.some(f => f.path === "index.html"), "Saved project has no index.html");
+
+          console.log("7) Build history");
+          const builds = await request(`/v1/builds?projectId=${encodeURIComponent(projectId)}`);
+          assert(builds?.success === true && builds.builds.some(b => b.id === builder.build.id), "Build history missing builder build");
+
+          console.log("8) Public deployed site");
+          const site = await fetch(`${base}/sites/${slug}`);
+          assert(site.ok, `Public site failed with HTTP ${site.status}`);
+          const html = await site.text();
+          assert(/<html[\s>]/i.test(html), "Public site did not return HTML");
+
+          console.log("9) Deployment history");
+          const history = await request(`/v1/deployments/${deploymentId}/history`);
+          assert(history?.success === true, "Deployment history failed");
+
+          console.log("10) Usage");
+          const usage = await request("/v1/usage");
+          assert(usage?.success === true && Array.isArray(usage.usage), "Usage endpoint failed");
+
+          console.log("FULL SMOKE TEST PASSED");
+          console.log(JSON.stringify({
+            projectId,
+            buildId: builder.build.id,
+            deploymentId,
+            slug,
+            publicUrl: base + builder.deployment.url,
+            creditsRemaining: builder.credits_remaining
+          }, null, 2));
+          NODE
