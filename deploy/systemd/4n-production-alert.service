@@ -1,0 +1,9 @@
+[Unit]
+Description=4N DEV Core production health alert check
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/4n-dev-core/scripts/check-production-alerts.sh
