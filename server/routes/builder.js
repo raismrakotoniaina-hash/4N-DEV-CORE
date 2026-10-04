@@ -7,7 +7,7 @@ import { upsertFile } from "../files.js";
 import { createDeployment } from "../hosting.js";
 import { buildProject } from "../build.js";
 import { recordUsage } from "../usage.js";
-import { getBalance, spendCredits } from "../credits.js";
+import { getBalance, spendCredits, refundCredits } from "../credits.js";
 import { getServicePrice, getServiceLimit } from "../creditPolicy.js";
 
 const router = express.Router();
@@ -309,9 +309,17 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       ));
     } catch (error) {
       console.error("4N DEV Builder persistence error:", error.message);
+      let creditsRefunded = false;
+      try {
+        await refundCredits(req.apiKey.id, BUILDER_COST, "builder_persistence_failure");
+        creditsRefunded = true;
+      } catch (refundError) {
+        console.error("4N DEV Builder credit refund error:", refundError.message);
+      }
       return res.status(500).json({
         success: false,
-        error: "Builder output could not be saved after credit reservation"
+        error: "Builder output could not be saved after credit reservation",
+        credits_refunded: creditsRefunded
       });
     }
 
@@ -320,6 +328,13 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       build = await buildProject(req.apiKey.id, project, savedFiles);
     } catch (error) {
       console.error("4N DEV Builder build error:", error.message);
+      let creditsRefunded = false;
+      try {
+        await refundCredits(req.apiKey.id, BUILDER_COST, "builder_build_failure");
+        creditsRefunded = true;
+      } catch (refundError) {
+        console.error("4N DEV Builder credit refund error:", refundError.message);
+      }
       return res.status(error.statusCode || 422).json({
         success: false,
         error: "Builder output was saved but the production build failed",
@@ -327,7 +342,8 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
         files: savedFiles,
         review,
         repair,
-        build_error: error.message
+        build_error: error.message,
+        credits_refunded: creditsRefunded
       });
     }
 
@@ -336,6 +352,13 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       deployment = await createDeployment(req.apiKey.id, project, build.files);
     } catch (error) {
       console.error("4N DEV Builder deployment error:", error.message);
+      let creditsRefunded = false;
+      try {
+        await refundCredits(req.apiKey.id, BUILDER_COST, "builder_deployment_failure");
+        creditsRefunded = true;
+      } catch (refundError) {
+        console.error("4N DEV Builder credit refund error:", refundError.message);
+      }
       return res.status(500).json({
         success: false,
         error: "Builder output was built and saved but automatic deployment failed",
@@ -348,7 +371,8 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
           fileCount: build.fileCount
         },
         review,
-        repair
+        repair,
+        credits_refunded: creditsRefunded
       });
     }
 
