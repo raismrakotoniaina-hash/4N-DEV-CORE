@@ -34,6 +34,14 @@ export async function checkDatabase() {
   return result.rows[0];
 }
 
+export async function closeDatabase() {
+  if (!pool) return;
+
+  const currentPool = pool;
+  pool = null;
+  await currentPool.end();
+}
+
 export async function initializeDatabase() {
   if (!isDatabaseConfigured()) return false;
 
