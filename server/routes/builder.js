@@ -5,6 +5,7 @@ import { generateBuilderResponse, generateBuilderPlan, repairBuilderFiles } from
 import { getProject, createProject } from "../projects.js";
 import { upsertFile } from "../files.js";
 import { createDeployment } from "../hosting.js";
+import { buildProject } from "../build.js";
 import { recordUsage } from "../usage.js";
 import { getBalance, spendCredits } from "../credits.js";
 import { getServicePrice, getServiceLimit } from "../creditPolicy.js";
@@ -314,16 +315,38 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       });
     }
 
+    let build;
+    try {
+      build = await buildProject(req.apiKey.id, project, savedFiles);
+    } catch (error) {
+      console.error("4N DEV Builder build error:", error.message);
+      return res.status(error.statusCode || 422).json({
+        success: false,
+        error: "Builder output was saved but the production build failed",
+        project,
+        files: savedFiles,
+        review,
+        repair,
+        build_error: error.message
+      });
+    }
+
     let deployment;
     try {
-      deployment = await createDeployment(req.apiKey.id, project, savedFiles);
+      deployment = await createDeployment(req.apiKey.id, project, build.files);
     } catch (error) {
       console.error("4N DEV Builder deployment error:", error.message);
       return res.status(500).json({
         success: false,
-        error: "Builder output was saved but automatic deployment failed",
+        error: "Builder output was built and saved but automatic deployment failed",
         project,
         files: savedFiles,
+        build: {
+          id: build.id,
+          type: build.type,
+          status: build.status,
+          fileCount: build.fileCount
+        },
         review,
         repair
       });
@@ -337,6 +360,7 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
         credits_used: BUILDER_COST,
         credits_remaining: balanceAfter,
         files_generated: savedFiles.length,
+        build_id: build.id,
         deployment_id: deployment.id
       }
     });
@@ -345,6 +369,16 @@ router.post("/builder", requireApiKey("coding"), requirePlanFeature("coding"), a
       success: true,
       project,
       files: savedFiles,
+      build: {
+        id: build.id,
+        type: build.type,
+        status: build.status,
+        entrypoint: build.entrypoint,
+        fileCount: build.fileCount,
+        totalCharacters: build.totalCharacters,
+        createdAt: build.createdAt,
+        updatedAt: build.updatedAt
+      },
       deployment: {
         id: deployment.id,
         projectId: deployment.projectId,
