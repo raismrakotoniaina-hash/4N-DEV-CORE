@@ -1,0 +1,11 @@
+[Unit]
+Description=Run 4N DEV Core safe production update daily
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=30m
+Unit=4n-production-update.service
+
+[Install]
+WantedBy=timers.target
