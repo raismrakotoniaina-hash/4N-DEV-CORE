@@ -1,0 +1,10 @@
+[Unit]
+Description=Run 4N DEV Core PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target
