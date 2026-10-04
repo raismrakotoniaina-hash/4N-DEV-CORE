@@ -1,0 +1,9 @@
+[Unit]
+Description=4N DEV Core Let's Encrypt certificate renewal
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/4n-dev-core
+ExecStart=/opt/4n-dev-core/scripts/certbot-renew.sh
