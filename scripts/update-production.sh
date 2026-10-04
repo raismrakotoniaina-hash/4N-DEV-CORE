@@ -4,6 +4,7 @@ set -eu
 APP_DIR="${APP_DIR:-/opt/4n-dev-core}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-24}"
 BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/backups/postgres}"
+LOCK_DIR="/var/lock/4n-dev-core-update"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: run as root."
@@ -14,6 +15,15 @@ if [ ! -d "$APP_DIR/.git" ]; then
   echo "ERROR: repository not found at $APP_DIR."
   exit 1
 fi
+
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "ERROR: another production update is already running."
+  exit 1
+fi
+cleanup() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
 
 cd "$APP_DIR"
 
