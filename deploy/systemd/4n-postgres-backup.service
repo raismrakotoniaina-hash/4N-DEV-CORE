@@ -1,0 +1,9 @@
+[Unit]
+Description=4N DEV Core PostgreSQL backup and external upload
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/4n-dev-core
+ExecStart=/bin/sh -c '/opt/4n-dev-core/scripts/backup-postgres.sh && /opt/4n-dev-core/scripts/upload-postgres-backup.sh'
