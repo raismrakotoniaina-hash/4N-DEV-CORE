@@ -44,19 +44,11 @@ app.use("/frontend", express.static(FRONTEND_DIR, { etag: false, lastModified: f
 // Public developer console. Keep this route separate from /health so the root URL
 // always opens the frontend and never the API health payload.
 app.get("/", (_req, res) => {
-  res.set({
-    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-    Pragma: "no-cache",
-    Expires: "0"
-  });
-  res.sendFile(path.join(FRONTEND_DIR, "index.html"), {
-    cacheControl: false,
-    lastModified: false,
-    etag: false
-  });
+  // Redirect to the static frontend entry point so Render never serves an API payload at root.
+  res.redirect(302, "/frontend/index.html?v=20261005");
 });
 
-app.get("/console", (_req, res) => res.redirect(302, "/"));
+app.get("/console", (_req, res) => res.redirect(302, "/frontend/index.html?v=20261005"));
 
 app.use((req, res, next) => {
   const requestId = req.get("x-request-id") || createRequestId();
