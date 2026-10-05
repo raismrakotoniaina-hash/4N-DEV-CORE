@@ -21,17 +21,11 @@ function getRedirectUrl(name, fallbackPath) {
 }
 
 function getWebhookSecret(req) {
-  return String(
-    req?.query?.secret ||
-    req?.get?.("X-International-Webhook-Secret") ||
-    ""
-  );
+  return String(req?.get?.("X-Zopayo-Signature") || req?.get?.("X-Webhook-Signature") || "");
 }
 
 function isSuccessfulStatus(value) {
-  return ["success", "successful", "paid", "completed", "effectue", "effectué"].includes(
-    String(value || "").trim().toLowerCase()
-  );
+  return String(value || "").trim().toUpperCase() === "COMPLETED";
 }
 
 function extractPaymentId(body) {
@@ -133,34 +127,30 @@ export default {
   },
 
   async verifyWebhook(req) {
-    if (!process.env.INTERNATIONAL_PAYMENT_WEBHOOK_SECRET) {
+    const webhookSecret = process.env.INTERNATIONAL_PAYMENT_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
       return {
         success: false,
         error: "International webhook secret is not configured"
       };
     }
 
-    if (
-      getWebhookSecret(req) !==
-      process.env.INTERNATIONAL_PAYMENT_WEBHOOK_SECRET
-    ) {
+    const signature = getWebhookSecret(req);
+    if (!signature || signature !== webhookSecret) {
       return {
         success: false,
-        error: "Invalid international webhook secret"
+        error: "Invalid Zopayo webhook security header"
       };
     }
 
     const body = req.body || {};
-    const status =
-      body?.status ??
-      body?.payment_status ??
-      body?.paymentStatus ??
-      body?.statut;
+    const status = body?.statut_general;
 
     if (!isSuccessfulStatus(status)) {
       return {
         success: false,
-        error: "Zopayo payment is not successful"
+        error: `Zopayo payment status is not COMPLETED: ${String(status || "UNKNOWN")}`
       };
     }
 
@@ -168,7 +158,7 @@ export default {
     if (!paymentId) {
       return {
         success: false,
-        error: "Missing Zopayo payment reference"
+        error: "Missing Zopayo id_relation"
       };
     }
 
@@ -184,7 +174,7 @@ export default {
       success: true,
       status: "paid",
       paymentId,
-      providerReference: extractProviderReference(body)
+      providerReference: body?.id_transaction || extractProviderReference(body)
     };
   }
 };
