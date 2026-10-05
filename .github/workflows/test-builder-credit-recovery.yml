@@ -40,10 +40,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Start Core API
         run: |
@@ -60,7 +59,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          BEFORE=$(curl -fsS             -H "Authorization: Bearer $CORE_API_KEY"             http://127.0.0.1:3001/v1/me)
+          BEFORE=$(curl -fsS \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            http://127.0.0.1:3001/v1/me)
 
           echo "$BEFORE" > before.json
 
@@ -74,7 +75,11 @@ jobs:
           echo "Credits before Builder failure: $BEFORE_CREDITS"
 
           set +e
-          RESPONSE=$(curl -sS -o builder-response.json -w "%{http_code}"             -X POST http://127.0.0.1:3001/v1/builder             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data '{"prompt":"Create a simple public landing page for 4N DEV with a heading, short description, and responsive styling."}')
+          RESPONSE=$(curl -sS -o builder-response.json -w "%{http_code}" \
+            -X POST http://127.0.0.1:3001/v1/builder \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"prompt":"Create a simple public landing page for 4N DEV with a heading, short description, and responsive styling."}')
           CURL_EXIT=$?
           set -e
 
@@ -110,7 +115,9 @@ jobs:
           }
           NODE
 
-          AFTER=$(curl -fsS             -H "Authorization: Bearer $CORE_API_KEY"             http://127.0.0.1:3001/v1/me)
+          AFTER=$(curl -fsS \
+            -H "Authorization: Bearer $CORE_API_KEY" \
+            http://127.0.0.1:3001/v1/me)
 
           echo "$AFTER" > after.json
 
@@ -133,4 +140,9 @@ jobs:
 
       - name: Print Core logs on failure
         if: failure()
-        run: cat /tmp/4n-core.log
+        run: |
+          if [ -f /tmp/4n-core.log ]; then
+            cat /tmp/4n-core.log
+          else
+            echo "Core log file was not created."
+          fi
