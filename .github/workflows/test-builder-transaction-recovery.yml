@@ -1,0 +1,108 @@
+name: Test Builder Transaction Recovery
+
+on:
+  workflow_dispatch:
+
+jobs:
+  builder-recovery:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: 4ncore
+          POSTGRES_USER: 4ncore
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U 4ncore -d 4ncore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://4ncore:test-password@127.0.0.1:5432/4ncore
+      CORE_API_KEY: 4ndev_sk_test_builder_recovery
+      CORE_API_KEY_PLAN: pro
+      CORE_API_KEY_INITIAL_CREDITS: 500
+      CORE_ADMIN_SECRET: test-admin-secret
+      AI_PROVIDER: demo
+      NODE_ENV: test
+      PORT: 3001
+      BUILDER_TEST_FORCE_DEPLOYMENT_FAILURE: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Start Core
+        run: |
+          npm start > core.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3001/health/ready > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3001/health/ready
+
+      - name: Verify Builder credit recovery after forced deployment failure
+        run: |
+          set -euo pipefail
+
+          BEFORE=$(curl -fsS http://127.0.0.1:3001/v1/me             -H "Authorization: Bearer $CORE_API_KEY")
+          echo "$BEFORE" > before.json
+
+          BEFORE_CREDITS=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("before.json","utf8")).developer.credits)')
+          test "$BEFORE_CREDITS" = "500"
+
+          STATUS=$(curl -sS -o builder-failure.json -w "%{http_code}"             -X POST http://127.0.0.1:3001/v1/builder             -H "Authorization: Bearer $CORE_API_KEY"             -H "Content-Type: application/json"             --data '{"prompt":"Create a simple 4N DEV landing page for recovery testing."}')
+
+          test "$STATUS" = "500"
+
+          node - <<'NODE'
+          const fs = require("fs");
+          const body = JSON.parse(fs.readFileSync("builder-failure.json", "utf8"));
+          if (body.success !== false) throw new Error("Builder unexpectedly succeeded");
+          if (body.credits_refunded !== true) {
+            throw new Error("Builder did not report a successful credit refund: " + JSON.stringify(body));
+          }
+          console.log("Forced deployment failure correctly triggered credit recovery.");
+          NODE
+
+          AFTER=$(curl -fsS http://127.0.0.1:3001/v1/me             -H "Authorization: Bearer $CORE_API_KEY")
+          echo "$AFTER" > after.json
+
+          AFTER_CREDITS=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("after.json","utf8")).developer.credits)')
+          test "$AFTER_CREDITS" = "$BEFORE_CREDITS"
+
+      - name: Verify debit and refund transactions in PostgreSQL
+        run: |
+          set -euo pipefail
+
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT type, amount, reason
+          FROM credit_transactions
+          WHERE api_key_id = 'core-bootstrap-key'
+          ORDER BY created_at;
+          SQL
+
+          DEBITS=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM credit_transactions WHERE api_key_id='core-bootstrap-key' AND type='debit' AND reason='builder_usage' AND amount=10")
+          REFUNDS=$(psql "$DATABASE_URL" -tAc "SELECT COUNT(*) FROM credit_transactions WHERE api_key_id='core-bootstrap-key' AND type='refund' AND reason='builder_deployment_failure' AND amount=10")
+
+          test "$DEBITS" = "1"
+          test "$REFUNDS" = "1"
+
+      - name: Final result
+        run: echo "Builder transaction recovery test passed: failed deployment refunded the reserved Builder credits."
