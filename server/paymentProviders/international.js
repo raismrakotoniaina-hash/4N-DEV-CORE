@@ -21,7 +21,7 @@ function getRedirectUrl(name, fallbackPath) {
 }
 
 function getWebhookSecret(req) {
-  return String(req?.get?.("X-Zopayo-Signature") || req?.get?.("X-Webhook-Signature") || "");
+  return String(req?.get?.("X-Webhook-Secret") || "");
 }
 
 function isSuccessfulStatus(value) {
