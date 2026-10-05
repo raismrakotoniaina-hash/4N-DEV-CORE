@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1020">
+  <title>4N DEV — Developer Console</title>
+  <link rel="stylesheet" href="/frontend/styles.css">
+</head>
+<body>
+  <div id="app">
+    <section id="connectScreen" class="screen">
+      <div class="brand"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Console</small></div></div>
+      <div class="connect-card">
+        <div class="eyebrow">4N DEV CORE</div>
+        <h1>Connectez votre compte développeur</h1>
+        <p>Entrez votre clé API 4N DEV pour accéder au Dashboard, Chat, Coding, Builder, projets et crédits.</p>
+        <label for="apiKey">4N DEV API Key</label>
+        <div class="key-row"><input id="apiKey" type="password" autocomplete="off" placeholder="4ndev_sk_..." /><button id="toggleKey" class="icon-btn" type="button">Afficher</button></div>
+        <label class="remember"><input id="rememberKey" type="checkbox" checked> Conserver la clé sur cet appareil</label>
+        <button id="connectBtn" class="primary full">Se connecter</button>
+        <div id="connectError" class="error hidden"></div>
+        <p class="hint">La clé n'est jamais affichée dans l'URL. Elle est envoyée uniquement au Core API via Authorization: Bearer.</p>
+      </div>
+    </section>
+
+    <section id="consoleScreen" class="hidden">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Console</small></div></div>
+        <div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— crédits</span><button id="logoutBtn" class="ghost">Déconnexion</button></div>
+      </header>
+      <div class="layout">
+        <aside class="sidebar">
+          <button class="nav active" data-page="dashboard">⌂ <span>Dashboard</span></button>
+          <button class="nav" data-page="chat">✦ <span>AI Chat</span></button>
+          <button class="nav" data-page="coding">⌘ <span>Coding</span></button>
+          <button class="nav" data-page="builder">◈ <span>AI Builder</span></button>
+          <button class="nav" data-page="projects">▣ <span>Projects</span></button>
+          <button class="nav" data-page="billing">◉ <span>Plans & Billing</span></button>
+          <button class="nav" data-page="settings">⚙ <span>API & Settings</span></button>
+        </aside>
+        <main id="main"></main>
+      </div>
+    </section>
+  </div>
+  <script src="/frontend/app.js"></script>
+</body>
+</html>
