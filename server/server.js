@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import cors from "cors";
 import helmet from "helmet";
 import { createApiKey } from "./apiKeys.js";
@@ -27,12 +29,18 @@ import { checkDatabase, initializeDatabase, closeDatabase } from "./db.js";
 import { createRequestId, logError, logInfo, logRequest, sanitizeError } from "./logger.js";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const FRONTEND_DIR = path.join(__dirname, "..", "frontend");
 const PORT = Number(process.env.PORT || 3001);
 
 app.disable("x-powered-by");
 
 app.use(helmet());
 app.use(cors());
+
+app.use("/frontend", express.static(FRONTEND_DIR));
+app.get("/", (_req, res) => res.sendFile(path.join(FRONTEND_DIR, "index.html")));
 
 app.use((req, res, next) => {
   const requestId = req.get("x-request-id") || createRequestId();
