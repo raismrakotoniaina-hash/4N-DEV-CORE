@@ -18,17 +18,17 @@
 <label for="apiKey">4N DEV API Key</label>
 <div class="key-row">
 <input id="apiKey" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="4ndev_sk_...">
-<button id="toggleKey" class="icon-btn" type="button" onclick="toggleApiKey()">Afficher</button>
+<button id="toggleKey" class="icon-btn" type="button">Afficher</button>
 </div>
 <label class="remember"><input id="rememberKey" type="checkbox" checked> Conserver la clé sur cet appareil</label>
-<button id="connectBtn" class="primary full" type="button" onclick="connectDeveloper()">Se connecter</button>
+<button id="connectBtn" class="primary full" type="button">Se connecter</button>
 <div id="connectError" class="error hidden"></div>
 <p class="hint">La clé est envoyée au Core API uniquement via Authorization: Bearer.</p>
 </div></section>
 
 <section id="consoleScreen" class="hidden">
 <header class="topbar"><div class="brand"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Console</small></div></div>
-<div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— crédits</span><button id="logoutBtn" class="ghost" type="button" onclick="logoutDeveloper()">Déconnexion</button></div></header>
+<div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— crédits</span><button id="logoutBtn" class="ghost" type="button">Déconnexion</button></div></header>
 <div class="layout">
 <aside class="sidebar">
 <div class="nav-section">WORKSPACE</div>
