@@ -1,19 +1,25 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#080b18"><title>4N DEV — Developer Console</title>
-<link rel="stylesheet" href="/frontend/styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080b18">
+<title>4N DEV — Developer Console</title>
+<link rel="stylesheet" href="/frontend/styles.css?v=20261005-2">
 </head>
 <body>
 <div id="app">
 <section id="connectScreen" class="screen">
 <div class="brand brand-fixed"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Console</small></div></div>
 <div class="connect-card">
-<div class="eyebrow">4N DEV CORE</div><h1>Connectez votre compte développeur</h1>
+<div class="eyebrow">4N DEV CORE</div>
+<h1>Connectez votre compte développeur</h1>
 <p>Accédez aux services IA, au Builder, aux projets, aux déploiements, à l'usage et à la facturation.</p>
 <label for="apiKey">4N DEV API Key</label>
-<div class="key-row"><input id="apiKey" type="password" autocomplete="off" placeholder="4ndev_sk_..."><button id="toggleKey" class="icon-btn" type="button">Afficher</button></div>
+<div class="key-row">
+<input id="apiKey" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="4ndev_sk_...">
+<button id="toggleKey" class="icon-btn" type="button">Afficher</button>
+</div>
 <label class="remember"><input id="rememberKey" type="checkbox" checked> Conserver la clé sur cet appareil</label>
 <button id="connectBtn" class="primary full" type="button">Se connecter</button>
 <div id="connectError" class="error hidden"></div>
@@ -26,19 +32,20 @@
 <div class="layout">
 <aside class="sidebar">
 <div class="nav-section">WORKSPACE</div>
-<button class="nav active" data-page="dashboard">⌂ <span>Dashboard</span></button>
-<button class="nav" data-page="chat">✦ <span>AI Chat</span></button>
-<button class="nav" data-page="coding">⌘ <span>Coding</span></button>
-<button class="nav" data-page="image">◉ <span>AI Image</span></button>
-<button class="nav" data-page="builder">◈ <span>AI Builder</span></button>
-<button class="nav" data-page="projects">▣ <span>Projects</span></button>
-<button class="nav" data-page="usage">◌ <span>Usage</span></button>
+<button class="nav active" data-page="dashboard" type="button">⌂ <span>Dashboard</span></button>
+<button class="nav" data-page="chat" type="button">✦ <span>AI Chat</span></button>
+<button class="nav" data-page="coding" type="button">⌘ <span>Coding</span></button>
+<button class="nav" data-page="image" type="button">◉ <span>AI Image</span></button>
+<button class="nav" data-page="builder" type="button">◈ <span>AI Builder</span></button>
+<button class="nav" data-page="projects" type="button">▣ <span>Projects</span></button>
+<button class="nav" data-page="usage" type="button">◌ <span>Usage</span></button>
 <div class="nav-section">ACCOUNT</div>
-<button class="nav" data-page="billing">◆ <span>Plans & Billing</span></button>
-<button class="nav" data-page="settings">⚙ <span>API & Settings</span></button>
+<button class="nav" data-page="billing" type="button">◆ <span>Plans & Billing</span></button>
+<button class="nav" data-page="settings" type="button">⚙ <span>API & Settings</span></button>
 </aside>
 <main id="main"></main>
 </div></section>
 </div>
-<script src="/frontend/app.js"></script>
-</body></html>
+<script src="/frontend/app.js?v=20261005-2" defer></script>
+</body>
+</html>
