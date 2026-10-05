@@ -170,8 +170,8 @@ export function listProviders() {
       id: "international",
       name: "International Gateway",
       type: "international",
-      currency: ["USD", "EUR", "GBP"],
-      status: "planned"
+      currency: ["USD", "EUR"],
+      status: "available"
     }
   ];
 }
