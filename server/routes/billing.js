@@ -107,7 +107,7 @@ router.post("/orders", async (req, res) => {
     });
   }
 
-  const allowedCurrencies = ["MGA", "USD", "EUR", "GBP"];
+  const allowedCurrencies = ["MGA", "USD", "EUR"];
   if (!allowedCurrencies.includes(currency)) {
     return res.status(400).json({
       success: false,
@@ -205,7 +205,7 @@ router.post("/orders/:orderId/payments", async (req, res) => {
 
 
 router.post("/orders/:orderId/checkout", async (req, res) => {
-  const order = getOrder(req.apiKey.id, req.params.orderId);
+  const order = await getOrder(req.apiKey.id, req.params.orderId);
 
   if (!order) {
     return res.status(404).json({
