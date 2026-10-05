@@ -1,3 +1,10 @@
+document.addEventListener("DOMContentLoaded",function(){
+  const tb=document.getElementById("toggleKey");
+  const cb=document.getElementById("connectBtn");
+  const inp=document.getElementById("apiKey");
+  if(tb) tb.addEventListener("pointerdown",function(e){e.preventDefault();e.stopPropagation();if(inp){inp.type=inp.type==="password"?"text":"password";tb.textContent=inp.type==="password"?"Afficher":"Masquer";inp.focus();}},true);
+  if(cb) cb.addEventListener("pointerdown",function(e){e.preventDefault();e.stopPropagation();cb.click();},true);
+});
 const API=location.origin;
 let key=localStorage.getItem("4ndev_api_key")||"",me=null,currentProject=null,currentFiles=[];
 const $=s=>document.querySelector(s);
