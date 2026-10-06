@@ -38,14 +38,14 @@
     <section id="onboardingCard" class="onboarding-card">
       <div class="card-top"><span class="step">01 / DEVELOPER ACCESS</span><span class="lock">⌑ Secure onboarding</span></div>
 
-      <form id="createKeyForm" novalidate onsubmit="return false;">
+      <form id="createKeyForm" novalidate>
         <div id="createKeyStep">
           <div class="card-icon">⌁</div>
           <h2>Create your developer account</h2>
           <p class="sub">Start with a free developer key. 4N DEV generates the secret for you — you do not need an existing API key.</p>
           <label for="developerName">Developer or company name</label>
           <input id="developerName" class="field large-field" maxlength="80" autocomplete="name" placeholder="e.g. Ismael or 4N Dev" required>
-          <button id="createKeyBtn" class="primary full" type="button" onclick="return window.__4nCreateKeyFallback && window.__4nCreateKeyFallback(event)"><span>Create API key</span><b>→</b></button>
+          <button id="createKeyBtn" class="primary full" type="submit"><span>Create API key</span><b>→</b></button>
           <div id="createKeyError" class="error hidden" role="alert"></div>
           <p class="fine">The secret is displayed once after creation. Store it securely and never publish it in a repository or browser-side production application.</p>
         </div>
@@ -98,7 +98,7 @@
 </div>
 </section>
 
-<script src="/frontend/app.js?v=20261006-16" defer></script>
+<script src="/frontend/app.js?v=20261006-19" defer></script>
 <script>
 (function () {
   function showError(message) {
