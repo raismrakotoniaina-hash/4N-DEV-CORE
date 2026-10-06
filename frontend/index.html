@@ -3,49 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#080b18">
-<title>4N DEV — Developer Console</title>
-<link rel="stylesheet" href="/frontend/styles.css?v=20261005-5">
+<meta name="theme-color" content="#0b1020">
+<title>4N DEV — Developer Platform</title>
+<link rel="stylesheet" href="/frontend/styles.css?v=20261006-1">
 </head>
 <body>
 <div id="app">
 <section id="connectScreen" class="screen">
-<div class="brand brand-fixed"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Console</small></div></div>
-<div class="connect-card">
-<div class="eyebrow">4N DEV CORE</div>
-<h1>Connectez votre compte développeur</h1>
-<p>Accédez aux services IA, au Builder, aux projets, aux déploiements, à l'usage et à la facturation.</p>
-<label for="apiKey">4N DEV API Key</label>
-<div class="key-row">
-<input id="apiKey" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="4ndev_sk_...">
-<button id="toggleKey" class="icon-btn" type="button">Afficher</button>
-</div>
-<label class="remember"><input id="rememberKey" type="checkbox" checked> Conserver la clé sur cet appareil</label>
-<button id="connectBtn" class="primary full" type="button">Se connecter</button>
-<div id="connectError" class="error hidden"></div>
-<p class="hint">La clé est envoyée au Core API uniquement via Authorization: Bearer.</p>
-</div></section>
+  <div class="auth-brand"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Platform</small></div></div>
+  <div class="connect-card">
+    <div class="eyebrow">4N DEV API</div>
+    <h1>Developer Platform</h1>
+    <p>Connectez votre compte développeur pour accéder aux modèles, API keys, projets, usage et billing.</p>
+    <label for="apiKey">Secret API key</label>
+    <div class="key-row"><input id="apiKey" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="4ndev_sk_..."><button id="toggleKey" class="icon-btn" type="button">Afficher</button></div>
+    <label class="remember"><input id="rememberKey" type="checkbox" checked> Conserver cette clé sur cet appareil</label>
+    <button id="connectBtn" class="primary full" type="button">Continuer</button>
+    <div id="connectError" class="error hidden"></div>
+    <p class="hint">La clé est utilisée uniquement pour authentifier les appels vers le 4N DEV Core API.</p>
+  </div>
+</section>
 
 <section id="consoleScreen" class="hidden">
-<header class="topbar"><div class="brand"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Console</small></div></div>
-<div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— crédits</span><button id="logoutBtn" class="ghost" type="button">Déconnexion</button></div></header>
-<div class="layout">
-<aside class="sidebar">
-<div class="nav-section">WORKSPACE</div>
-<button class="nav active" data-page="dashboard" type="button">⌂ <span>Dashboard</span></button>
-<button class="nav" data-page="chat" type="button">✦ <span>AI Chat</span></button>
-<button class="nav" data-page="coding" type="button">⌘ <span>Coding</span></button>
-<button class="nav" data-page="image" type="button">◉ <span>AI Image</span></button>
-<button class="nav" data-page="builder" type="button">◈ <span>AI Builder</span></button>
-<button class="nav" data-page="projects" type="button">▣ <span>Projects</span></button>
-<button class="nav" data-page="usage" type="button">◌ <span>Usage</span></button>
-<div class="nav-section">ACCOUNT</div>
-<button class="nav" data-page="billing" type="button">◆ <span>Plans & Billing</span></button>
-<button class="nav" data-page="settings" type="button">⚙ <span>API & Settings</span></button>
+<header class="topbar">
+  <button id="mobileNav" class="mobile-nav" type="button" aria-label="Menu">☰</button>
+  <a class="brand" href="#" data-page="overview"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Platform</small></div></a>
+  <div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— credits</span><button id="logoutBtn" class="ghost" type="button">Déconnexion</button></div>
+</header>
+<div class="platform">
+<aside id="sidebar" class="sidebar">
+  <div class="nav-section">PLATFORM</div>
+  <button class="nav active" data-page="overview" type="button"><span class="nav-icon">⌂</span>Overview</button>
+  <button class="nav" data-page="models" type="button"><span class="nav-icon">✦</span>Models</button>
+  <button class="nav" data-page="playground" type="button"><span class="nav-icon">◈</span>Playground</button>
+  <button class="nav" data-page="apiKeys" type="button"><span class="nav-icon">⌁</span>API Keys</button>
+  <button class="nav" data-page="projects" type="button"><span class="nav-icon">□</span>Projects</button>
+  <div class="nav-section">RESOURCES</div>
+  <button class="nav" data-page="usage" type="button"><span class="nav-icon">◌</span>Usage</button>
+  <button class="nav" data-page="builder" type="button"><span class="nav-icon">◇</span>Builder</button>
+  <button class="nav" data-page="docs" type="button"><span class="nav-icon">▤</span>Documentation</button>
+  <div class="nav-section">ACCOUNT</div>
+  <button class="nav" data-page="billing" type="button"><span class="nav-icon">◆</span>Billing</button>
+  <button class="nav" data-page="settings" type="button"><span class="nav-icon">⚙</span>Settings</button>
+  <div class="sidebar-footer"><div class="live-dot"></div><span>Core API online</span></div>
 </aside>
 <main id="main"></main>
-</div></section>
 </div>
-<script src="/frontend/app.js?v=20261005-5"></script>
+</section>
+</div>
+<script src="/frontend/app.js?v=20261006-1"></script>
 </body>
 </html>
