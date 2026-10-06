@@ -32,7 +32,7 @@ router.post("/chat", requireApiKey("chat"), async (req, res) => {
       });
     }
 
-    const balanceBefore = getBalance(req.apiKey.id);
+    const balanceBefore = await getBalance(req.apiKey.id);
 
     if (balanceBefore < CHAT_COST) {
       return res.status(402).json({
@@ -44,7 +44,7 @@ router.post("/chat", requireApiKey("chat"), async (req, res) => {
     }
 
     const result = await generateChatResponse(input);
-    const balanceAfter = spendCredits(req.apiKey.id, CHAT_COST, "chat_usage");
+    const balanceAfter = await spendCredits(req.apiKey.id, CHAT_COST, "chat_usage");
 
     if (balanceAfter === null) {
       return res.status(402).json({
@@ -55,7 +55,7 @@ router.post("/chat", requireApiKey("chat"), async (req, res) => {
       });
     }
 
-    recordUsage({
+    await recordUsage({
       apiKeyId: req.apiKey.id,
       endpoint: "/v1/chat",
       usage: {
