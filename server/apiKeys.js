@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { query, isDatabaseConfigured } from "./db.js";
+import { readStore, updateStore } from "./localStore.js";
 
 function mapRow(row) {
   if (!row) return null;
@@ -7,21 +8,14 @@ function mapRow(row) {
   return {
     id: row.id,
     name: row.name,
-    planId: row.plan_id,
+    planId: row.plan_id ?? row.planId,
     prefix: row.prefix,
     hash: row.hash,
     scopes: Array.isArray(row.scopes) ? row.scopes : [],
     active: row.active,
-    createdAt: row.created_at instanceof Date
-      ? row.created_at.toISOString()
-      : row.created_at,
-    ...(row.updated_at
-      ? {
-          updatedAt:
-            row.updated_at instanceof Date
-              ? row.updated_at.toISOString()
-              : row.updated_at
-        }
+    createdAt: row.created_at ?? row.createdAt,
+    ...(row.updated_at || row.updatedAt
+      ? { updatedAt: row.updated_at ?? row.updatedAt }
       : {})
   };
 }
@@ -49,15 +43,32 @@ export async function createApiKey({
   scopes = ["chat"],
   planId = "free"
 } = {}) {
-  if (!isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL is required for API key storage");
-  }
-
   const secret = crypto.randomBytes(32).toString("base64url");
   const key = `4ndev_sk_live_${secret}`;
   const hash = crypto.createHash("sha256").update(key).digest("hex");
   const id = crypto.randomUUID();
-  const now = new Date();
+  const now = new Date().toISOString();
+
+  if (!isDatabaseConfigured()) {
+    const row = {
+      id,
+      name,
+      planId,
+      prefix: key.slice(0, 20),
+      hash,
+      scopes,
+      active: true,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await updateStore((state) => ({
+      ...state,
+      apiKeys: [...state.apiKeys, row]
+    }));
+
+    return { ...mapRow(row), key };
+  }
 
   const result = await query(
     `INSERT INTO api_keys
@@ -76,9 +87,14 @@ export async function authenticateApiKey(key) {
   const bootstrap = bootstrapApiKey(key);
   if (bootstrap) return bootstrap;
 
-  if (!isDatabaseConfigured()) return null;
-
   const hash = crypto.createHash("sha256").update(key).digest("hex");
+
+  if (!isDatabaseConfigured()) {
+    const state = await readStore();
+    const row = state.apiKeys.find((item) => item.hash === hash && item.active);
+    return mapRow(row);
+  }
+
   const result = await query(
     `SELECT id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at
      FROM api_keys
@@ -91,7 +107,13 @@ export async function authenticateApiKey(key) {
 }
 
 export async function listApiKeys(apiKeyId = null) {
-  if (!isDatabaseConfigured()) return [];
+  if (!isDatabaseConfigured()) {
+    const state = await readStore();
+    return state.apiKeys
+      .filter((item) => item.active && (!apiKeyId || item.id === apiKeyId))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .map(mapRow);
+  }
 
   const params = [];
   let sql = `SELECT id, name, plan_id, prefix, hash, scopes, active, created_at, updated_at
@@ -110,8 +132,23 @@ export async function listApiKeys(apiKeyId = null) {
 }
 
 export async function setApiKeyActive(apiKeyId, active) {
-  if (!apiKeyId || typeof active !== "boolean" || !isDatabaseConfigured()) {
-    return null;
+  if (!apiKeyId || typeof active !== "boolean") return null;
+
+  if (!isDatabaseConfigured()) {
+    let updated = null;
+
+    await updateStore((state) => {
+      const apiKey = state.apiKeys.find((item) => item.id === apiKeyId);
+      if (!apiKey) return state;
+
+      updated = { ...apiKey, active, updatedAt: new Date().toISOString() };
+      return {
+        ...state,
+        apiKeys: state.apiKeys.map((item) => item.id === apiKeyId ? updated : item)
+      };
+    });
+
+    return mapRow(updated);
   }
 
   const result = await query(
@@ -126,7 +163,24 @@ export async function setApiKeyActive(apiKeyId, active) {
 }
 
 export async function updateApiKeyPlan(apiKeyId, planId) {
-  if (!apiKeyId || !planId || !isDatabaseConfigured()) return null;
+  if (!apiKeyId || !planId) return null;
+
+  if (!isDatabaseConfigured()) {
+    let updated = null;
+
+    await updateStore((state) => {
+      const apiKey = state.apiKeys.find((item) => item.id === apiKeyId && item.active);
+      if (!apiKey) return state;
+
+      updated = { ...apiKey, planId, updatedAt: new Date().toISOString() };
+      return {
+        ...state,
+        apiKeys: state.apiKeys.map((item) => item.id === apiKeyId ? updated : item)
+      };
+    });
+
+    return mapRow(updated);
+  }
 
   const result = await query(
     `UPDATE api_keys
