@@ -1,0 +1,48 @@
+name: Test Self-Service API Key Onboarding
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-key-onboarding:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify self-service API key endpoint
+        env:
+          API: https://fourn-dev-core.onrender.com/v1
+        run: |
+          set -e
+
+          echo "== 1. ENDPOINT EXISTS =="
+          status=$(curl --max-time 60 --silent --show-error --output response.json --write-out "%{http_code}" \
+            -X POST -H "Content-Type: application/json" \
+            -d '{"name":"4N DEV Onboarding Smoke Test"}' \
+            "$API/keys/create")
+
+          echo "HTTP status: $status"
+          cat response.json
+
+          python3 - "$status" <<'PY'
+          import json, sys
+          status = int(sys.argv[1])
+          data = json.load(open("response.json"))
+
+          assert status == 503, f"Expected 503 while PostgreSQL is not configured, got {status}"
+          assert data["success"] is False
+          assert data["code"] == "DATABASE_NOT_CONFIGURED"
+          print("ONBOARDING ENDPOINT OK | Database guard returned expected 503")
+          PY
+
+          echo "== 2. NO SECRET IS EXPOSED =="
+          python3 - <<'PY'
+          import json
+          data = json.load(open("response.json"))
+          body = json.dumps(data).lower()
+          assert "core_admin_secret" not in body
+          assert "database_url" not in body
+          assert "api_key" not in body
+          print("SECRET EXPOSURE CHECK OK")
+          PY
+
+          echo "SELF-SERVICE API KEY ONBOARDING SMOKE TEST PASSED"
