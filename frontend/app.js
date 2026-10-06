@@ -1,222 +1,660 @@
-const API=location.origin;
-let key=localStorage.getItem("4ndev_api_key")||"",me=null,currentProject=null,currentFiles=[],lastBuilderPlan=null;
-const $=s=>document.querySelector(s);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=n=>new Intl.NumberFormat("fr-FR").format(Number(n||0));
-async function api(path,opt={}){
-  const headers={"Content-Type":"application/json",...(opt.headers||{})};
-  if(key)headers.Authorization="Bearer "+key;
-  const r=await fetch(API+path,{...opt,headers});
-  let d={};try{d=await r.json()}catch{}
-  if(!r.ok)throw new Error(d.error||d.message||("HTTP "+r.status));
-  return d;
-}
-function showOnboarding(msg=""){
-  $("#consoleScreen").classList.add("hidden");$("#onboardingScreen").classList.remove("hidden");
-  if(msg){$("#createKeyError").textContent=msg;$("#createKeyError").classList.remove("hidden")}
-}
-async function refreshMe(){
-  me=(await api("/v1/me")).developer;
-  $("#planBadge").textContent=(me.plan||"free").toUpperCase();
-  $("#creditBadge").textContent=money(me.credits)+" credits";
-  $("#workspaceName").textContent=me.name||"Developer";
-}
-function showConsole(){show("overview");refreshMe().catch(e=>{key="";localStorage.removeItem("4ndev_api_key");showOnboarding(e.message)})}
-async function createDeveloperKey(){
-  const b=$("#createKeyBtn"),name=$("#developerName").value.trim();
-  $("#createKeyError").classList.add("hidden");
-  if(!name){$("#createKeyError").textContent="Developer name is required.";$("#createKeyError").classList.remove("hidden");return}
-  b.disabled=true;b.innerHTML="<span>Creating API key…</span><b>•</b>";
-  try{
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-    const r=await fetch(API+"/v1/keys/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name}),signal:controller.signal});
+"use strict";
+
+const API = location.origin;
+let key = localStorage.getItem("4ndev_api_key") || "";
+let me = null;
+let currentProject = null;
+let currentFiles = [];
+let lastBuilderPlan = null;
+let lastBuild = null;
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[char]));
+const money = value => new Intl.NumberFormat("fr-FR").format(Number(value || 0));
+
+async function api(path, options = {}) {
+  const headers = {"Content-Type":"application/json", ...(options.headers || {})};
+  if (key) headers.Authorization = "Bearer " + key;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeout || 20000);
+  try {
+    const response = await fetch(API + path, {...options, headers, signal:controller.signal});
+    let data = {};
+    try { data = await response.json(); } catch {}
+    if (!response.ok) {
+      const error = new Error(data.error || data.message || ("HTTP " + response.status));
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+    return data;
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("The request timed out. Please try again.");
+    throw error;
+  } finally {
     clearTimeout(timer);
-    let d={};try{d=await r.json()}catch{}
-    if(!r.ok)throw new Error(d.error||("HTTP "+r.status));
-    key=d.api_key;
-    $("#createdApiKey").value=key;$("#createKeyStep").classList.add("hidden");$("#keyCreatedStep").classList.remove("hidden");
-    sessionStorage.setItem("4ndev_new_api_key",key);
-  }catch(e){
-    $("#createKeyError").textContent=e.name==="AbortError"?"Request timed out. Please try again.":(e.message||"Unable to create API key.");
-    $("#createKeyError").classList.remove("hidden");
-  }finally{b.disabled=false;b.innerHTML="<span>Create API key</span><b>→</b>"}
+  }
 }
-async function copyCreatedKey(){
-  const v=$("#createdApiKey").value;if(!v)return;
-  try{await navigator.clipboard.writeText(v)}catch{$("#createdApiKey").select();document.execCommand("copy")}
-  $("#copyStatus").textContent="API key copied to clipboard.";
+
+function toast(message, type="info") {
+  let box = $("#toast");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "toast";
+    box.className = "toast";
+    document.body.appendChild(box);
+  }
+  box.className = "toast " + type + " show";
+  box.textContent = message;
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => box.classList.remove("show"), 3600);
 }
-function continueToConsole(){localStorage.setItem("4ndev_api_key",key);sessionStorage.removeItem("4ndev_new_api_key");$("#onboardingScreen").classList.add("hidden");$("#consoleScreen").classList.remove("hidden");showConsole()}
-function logoutDeveloper(){key="";me=null;localStorage.removeItem("4ndev_api_key");sessionStorage.removeItem("4ndev_new_api_key");showOnboarding()}
-const pages={overview,models,playground,apiKeys,projects,usage,builder,docs,billing,settings};
-function show(p){
-  document.querySelectorAll(".nav").forEach(n=>n.classList.toggle("active",n.dataset.page===p));
-  const v=pages[p]||overview;$("#main").innerHTML=v();bind(p);$("#sidebar").classList.remove("open");
+
+function setButton(button, busy, busyText, normalText) {
+  if (!button) return;
+  button.disabled = busy;
+  button.classList.toggle("loading", busy);
+  button.innerHTML = busy ? "<span>" + busyText + "</span><b>•</b>" : "<span>" + normalText + "</span><b>→</b>";
 }
-function title(t,s,actions=""){return '<div class="page-title"><div><h1>'+t+'</h1><p class="muted">'+s+'</p></div><div class="page-actions">'+actions+"</div></div>"}
-function overview(){
-  return title("Overview","Your 4N DEV workspace at a glance.")+
-  '<div class="hero-panel"><div class="card"><span class="eyebrow">DEVELOPER CONSOLE</span><h2>Ship faster with 4N DEV.</h2><p class="muted">Use one API for AI models, application projects and the 4N DEV Builder. Start in the Playground, then move your integration to production.</p><div class="toolbar" style="margin-top:18px"><button class="primary" data-go="playground">Open Playground →</button><button class="ghost" data-go="docs">Read docs</button></div></div><div class="card"><div class="stat-label"><span>Workspace</span><span class="badge green">ONLINE</span></div><div style="font-size:18px;font-weight:750;margin-top:10px">'+esc(me?.name||"Developer")+'</div><p class="muted small">Plan: '+esc((me?.plan||"free").toUpperCase())+' · '+money(me?.credits)+' credits available</p><div class="endpoint">https://fourn-dev-core.onrender.com/v1</div></div></div>'+
-  '<div class="section"><div class="section-head"><h2>Workspace metrics</h2></div><div class="grid4">'+
-  stat("Credits remaining",money(me?.credits),"Available for API calls","✦")+stat("Plan",(me?.plan||"free").toUpperCase(),"Current developer plan","◆")+stat("API features",me?.features?.length||0,"Enabled capabilities","◈")+stat("Authentication","Active","Connected API key","⌁")+
-  '</div></div>'+
-  '<div class="section"><div class="section-head"><h2>Start building</h2><button class="ghost" data-go="docs">Documentation →</button></div><div class="grid3">'+
-  actionCard("✦","Models","Explore Chat, Coding, Image and Embeddings.","models","Explore models")+actionCard("◈","Projects","Create files, build applications and deploy them.","projects","Open projects")+actionCard("◇","Builder","Describe an app and let the Core Builder generate it.","builder","Open Builder")+
-  '</div></div>'+
-  '<div class="section"><div class="section-head"><h2>Quick API example</h2></div><div class="card"><div class="code">curl https://fourn-dev-core.onrender.com/v1/chat \\\n  -H "Authorization: Bearer 4ndev_sk_..." \\\n  -H "Content-Type: application/json" \\\n  -d '{"input":"Hello from 4N DEV"}'</div></div></div>';
+
+function showOnboarding(message="") {
+  $("#consoleScreen").classList.add("hidden");
+  $("#onboardingScreen").classList.remove("hidden");
+  const error = $("#createKeyError");
+  if (error) {
+    if (message) {
+      error.textContent = message;
+      error.classList.remove("hidden");
+    } else {
+      error.classList.add("hidden");
+      error.textContent = "";
+    }
+  }
 }
-function stat(label,value,foot,icon){return '<div class="card stat-card"><div class="stat-label"><span>'+label+'</span><span>'+icon+'</span></div><div class="stat-value">'+esc(value)+'</div><div class="stat-foot">'+foot+'</div></div>'}
-function actionCard(icon,name,desc,page,cta){return '<div class="card"><div class="model-icon">'+icon+'</div><h3>'+name+'</h3><p class="muted small">'+desc+'</p><button class="ghost" data-go="'+page+'" type="button">'+cta+' →</button></div>'}
-function models(){
-  const items=[
-    ["✦","Chat","gpt-5.6-luna / 4n-dev-demo-chat","General purpose conversational AI.","/v1/chat","1 credit"],
-    ["⌘","Coding","gpt-5.6-luna / 4n-dev-demo-coding","Code generation and programming assistance.","/v1/coding","5 credits"],
-    ["◉","Image","gpt-image-2 / 4n-dev-demo-image","AI image generation.","/v1/image","10–50 credits"],
-    ["◈","Embeddings","text-embedding-3-small / 4n-dev-demo-embedding","Vector embeddings for search and retrieval.","/v1/embeddings","1 credit"]
+
+function focusOnboarding() {
+  $("#onboardingCard")?.scrollIntoView({behavior:"smooth", block:"center"});
+  setTimeout(() => $("#developerName")?.focus(), 450);
+}
+
+async function createDeveloperKey(event) {
+  event?.preventDefault();
+  const input = $("#developerName");
+  const button = $("#createKeyBtn");
+  const error = $("#createKeyError");
+  const name = input?.value.trim() || "";
+  if (error) error.classList.add("hidden");
+  if (!name) {
+    if (error) {
+      error.textContent = "Developer or company name is required.";
+      error.classList.remove("hidden");
+    }
+    input?.focus();
+    return;
+  }
+
+  setButton(button, true, "Creating API key…", "Create API key");
+  try {
+    const data = await api("/v1/keys/create", {
+      method:"POST",
+      body:JSON.stringify({name}),
+      timeout:15000
+    });
+    if (!data.api_key) throw new Error("The Core API did not return an API key.");
+    key = data.api_key;
+    sessionStorage.setItem("4ndev_new_api_key", key);
+    $("#createdApiKey").value = key;
+    $("#createKeyStep").classList.add("hidden");
+    $("#keyCreatedStep").classList.remove("hidden");
+    $("#copyStatus").textContent = "Key created successfully.";
+    toast("Developer API key created.", "success");
+  } catch (error) {
+    const message = error.status === 503
+      ? (error.message + " — Database setup is required before a persistent developer account can be created.")
+      : (error.message || "Unable to create API key.");
+    if (error) console.error("4N DEV onboarding error", error);
+    if ($("#createKeyError")) {
+      $("#createKeyError").textContent = message;
+      $("#createKeyError").classList.remove("hidden");
+    }
+  } finally {
+    setButton(button, false, "", "Create API key");
+  }
+}
+
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  }
+}
+
+async function copyCreatedKey() {
+  const value = $("#createdApiKey")?.value || "";
+  if (!value) return;
+  const ok = await copyText(value);
+  $("#copyStatus").textContent = ok ? "API key copied to clipboard." : "Copy failed. Press and hold the key to copy it manually.";
+  toast(ok ? "API key copied." : "Copy failed.", ok ? "success" : "error");
+}
+
+function continueToConsole() {
+  if (!key) return toast("No API key is available yet.", "error");
+  localStorage.setItem("4ndev_api_key", key);
+  sessionStorage.removeItem("4ndev_new_api_key");
+  $("#onboardingScreen").classList.add("hidden");
+  $("#consoleScreen").classList.remove("hidden");
+  showConsole();
+}
+
+function logoutDeveloper() {
+  key = "";
+  me = null;
+  localStorage.removeItem("4ndev_api_key");
+  sessionStorage.removeItem("4ndev_new_api_key");
+  showOnboarding();
+  toast("Disconnected from this device.");
+}
+
+async function refreshMe() {
+  const data = await api("/v1/me");
+  me = data.developer || null;
+  if (!me) throw new Error("Developer account was not returned.");
+  $("#planBadge").textContent = String(me.plan || "free").toUpperCase();
+  $("#creditBadge").textContent = money(me.credits) + " credits";
+  $("#workspaceName").textContent = me.name || "Developer";
+  return me;
+}
+
+function showConsole() {
+  show("overview");
+  refreshMe().catch(error => {
+    console.error(error);
+    logoutDeveloper();
+    showOnboarding("This API key is no longer valid. Create a new developer key.");
+  });
+}
+
+function title(titleText, subtitle, actions="") {
+  return '<div class="page-title"><div><span class="eyebrow">4N DEV / CONSOLE</span><h1>'+esc(titleText)+'</h1><p class="muted">'+esc(subtitle)+'</p></div><div class="page-actions">'+actions+'</div></div>';
+}
+
+function stat(label, value, foot, icon) {
+  return '<div class="card stat-card"><div class="stat-label"><span>'+esc(label)+'</span><span class="stat-icon">'+icon+'</span></div><div class="stat-value">'+esc(value)+'</div><div class="stat-foot">'+esc(foot)+'</div></div>';
+}
+
+function actionCard(icon, name, description, page, cta) {
+  return '<div class="card action-card"><div class="model-icon">'+icon+'</div><h3>'+esc(name)+'</h3><p class="muted small">'+esc(description)+'</p><button class="ghost" data-go="'+page+'" type="button">'+esc(cta)+' →</button></div>';
+}
+
+function overview() {
+  const features = (me?.features || []).map(esc).join(" · ") || "chat · coding · image · embeddings";
+  return title("Overview","Your developer workspace, API access and application infrastructure.",
+    '<button class="ghost" data-go="docs">Read documentation →</button>') +
+  '<div class="hero-panel"><div class="card hero-card"><span class="eyebrow">DEVELOPER PLATFORM</span><h2>Build with the 4N DEV Core.</h2><p class="muted">Connect your application to AI models, create projects, generate applications with Builder, deploy sites and monitor credit usage from one console.</p><div class="toolbar hero-tools"><button class="primary" data-go="playground">Open Playground →</button><button class="ghost" data-go="models">Explore Models</button></div><div class="feature-line">'+features+'</div></div><div class="card status-card"><div class="status-head"><span>Workspace status</span><span class="badge green">ONLINE</span></div><h3>'+esc(me?.name || "Developer")+'</h3><p class="muted small">'+esc((me?.plan || "free").toUpperCase())+' plan · '+money(me?.credits)+' credits</p><div class="endpoint">https://fourn-dev-core.onrender.com/v1</div><div class="mini-status"><i></i> Core API responding</div></div></div>' +
+  '<div class="section"><div class="section-head"><div><h2>Workspace overview</h2><p class="muted small">Your current developer resources.</p></div></div><div class="grid4">'+
+  stat("Credits",money(me?.credits),"Available balance","✦")+
+  stat("Plan",(me?.plan || "free").toUpperCase(),"Developer plan","◆")+
+  stat("Capabilities",me?.features?.length || 0,"Enabled API features","◈")+
+  stat("Authentication","Active","Bearer API key","⌁")+
+  '</div></div>' +
+  '<div class="section"><div class="section-head"><div><h2>Build workflow</h2><p class="muted small">From first API request to production deployment.</p></div></div><div class="workflow"><div><b>01</b><strong>Connect</strong><span>Create a key and authenticate.</span></div><div><b>02</b><strong>Build</strong><span>Use models, projects or Builder.</span></div><div><b>03</b><strong>Deploy</strong><span>Build and publish your application.</span></div><div><b>04</b><strong>Operate</strong><span>Monitor usage, credits and billing.</span></div></div></div>' +
+  '<div class="section"><div class="section-head"><h2>Quick start</h2></div><div class="card code-card"><div class="code-tabs"><span class="active">cURL</span><span>JavaScript</span><span>Python</span></div><pre class="code">curl https://fourn-dev-core.onrender.com/v1/chat \
+  -H "Authorization: Bearer 4ndev_sk_..." \
+  -H "Content-Type: application/json" \
+  -d '{"input":"Hello from my application"}'</pre></div></div>';
+}
+
+function models() {
+  const items = [
+    ["✦","Chat","gpt-5.6-luna / 4n-dev-demo-chat","General conversational AI, assistants and product experiences.","/v1/chat","1 credit"],
+    ["⌘","Coding","gpt-5.6-luna / 4n-dev-demo-coding","Code generation, debugging and developer assistance.","/v1/coding","5 credits"],
+    ["◉","Image","gpt-image-2 / 4n-dev-demo-image","Generate images from natural-language prompts.","/v1/image","10–50 credits"],
+    ["◈","Embeddings","text-embedding-3-small / 4n-dev-demo-embedding","Create vector representations for search and retrieval.","/v1/embeddings","1 credit"]
   ];
-  return title("Models","AI capabilities exposed by 4N DEV Core.")+
-  '<div class="grid2">'+items.map(x=>'<div class="card model-card"><div class="model-icon">'+x[0]+'</div><h3>'+x[1]+'</h3><div class="model-id">'+x[2]+'</div><p class="muted">'+x[3]+'</p><span class="tag">'+x[4]+'</span><span class="tag">'+x[5]+'</span><div style="margin-top:14px"><button class="ghost use-model" data-model="'+x[1].toLowerCase()+'">Try in Playground →</button></div></div>').join("")+'</div>'+
-  '<div class="section"><div class="section-head"><h2>API endpoints</h2></div><div class="card"><table class="table"><thead><tr><th>Capability</th><th>Method</th><th>Endpoint</th><th>Auth</th></tr></thead><tbody>'+items.map(x=>'<tr><td>'+x[1]+'</td><td>POST</td><td class="endpoint">'+x[4]+'</td><td><span class="pill ok">Bearer key</span></td></tr>').join("")+'</tbody></table></div></div>';
+  return title("Models","Explore the AI capabilities available through the 4N DEV API.") +
+  '<div class="notice"><b>Model routing:</b> the public API uses stable capability endpoints. Your application authenticates with a 4N DEV API key rather than a provider secret.</div>' +
+  '<div class="section"><div class="grid2">'+items.map(item =>
+    '<div class="card model-card"><div class="model-top"><div class="model-icon">'+item[0]+'</div><span class="pill ok">AVAILABLE</span></div><h3>'+item[1]+'</h3><div class="model-id">'+item[2]+'</div><p class="muted">'+item[3]+'</p><div><span class="tag">'+item[4]+'</span><span class="tag">'+item[5]+'</span><span class="tag">Bearer auth</span></div><button class="ghost use-model" data-model="'+item[1].toLowerCase()+'">Try in Playground →</button></div>'
+  ).join("")+'</div></div>' +
+  '<div class="section"><div class="section-head"><h2>API surface</h2></div><div class="card table-wrap"><table class="table"><thead><tr><th>Capability</th><th>Method</th><th>Endpoint</th><th>Authentication</th></tr></thead><tbody>'+
+  items.map(item => '<tr><td><b>'+item[1]+'</b></td><td>POST</td><td class="endpoint">'+item[4]+'</td><td><span class="pill ok">Bearer key</span></td></tr>').join("")+
+  '</tbody></table></div></div>';
 }
-function playground(){
-  return title("Playground","Send authenticated requests to 4N DEV Core without leaving the console.")+
-  '<div class="grid2"><div class="card stack"><div class="section-head" style="margin:0"><h2>Request</h2><span class="pill ok">Authenticated</span></div><label class="small muted">Model capability</label><select id="playModel"><option value="chat">Chat</option><option value="coding">Coding</option><option value="image">Image</option><option value="embeddings">Embeddings</option></select><label class="small muted">Input</label><textarea id="playInput" rows="11" placeholder="Write a prompt or coding request…"></textarea><button id="playRun" class="primary" type="button">Run request →</button></div><div class="card"><div class="section-head" style="margin:0 0 10px"><h2>Response</h2><span id="playState" class="pill">Ready</span></div><div id="playOutput" class="output">Your model response will appear here.</div></div></div>';
+
+function playground() {
+  return title("Playground","Test authenticated Core API requests before integrating them into your application.")+
+  '<div class="playground-grid"><div class="card stack"><div class="section-head"><div><h2>Request</h2><p class="muted small">Your developer key is attached automatically.</p></div><span class="pill ok">AUTHENTICATED</span></div><label>Capability<select id="playModel"><option value="chat">Chat</option><option value="coding">Coding</option><option value="image">Image</option><option value="embeddings">Embeddings</option></select></label><label>Prompt / input<textarea id="playInput" rows="12" placeholder="Write a prompt, coding task or image description…"></textarea></label><button id="playRun" class="primary full" type="button">Run request →</button><div class="hint">Usage is deducted from your 4N DEV credit balance.</div></div><div class="card response-card"><div class="section-head"><div><h2>Response</h2><p class="muted small">Core API output</p></div><span id="playState" class="pill">READY</span></div><pre id="playOutput" class="output">Your model response will appear here.</pre></div></div>';
 }
-function apiKeys(){
-  const masked=key?key.slice(0,12)+"••••••••••••"+key.slice(-4):"—";
-  return title("API Keys","Manage the secret used to authenticate this developer console.")+
-  '<div class="card"><div class="section-head" style="margin:0"><div><h2>Active secret</h2><p class="muted small">Created during developer onboarding.</p></div><span class="pill ok">ACTIVE</span></div><div class="key-display" style="margin-top:16px">'+esc(masked)+'</div><div class="toolbar" style="margin-top:12px"><button id="copyKey" class="ghost">Copy key</button><button id="forgetKey" class="danger">Remove from this device</button></div></div>'+
-  '<div class="section"><div class="section-head"><h2>Security</h2></div><div class="grid2"><div class="card"><h3>Server-side usage</h3><p class="muted small">Store your secret in an environment variable such as <code>FOURN_DEV_API_KEY</code>. Do not ship it in frontend JavaScript.</p></div><div class="card"><h3>Authentication</h3><div class="endpoint">Authorization: Bearer 4ndev_sk_...</div><p class="muted small">Every protected Core API request is authenticated with your developer key.</p></div></div></div>';
+
+function apiKeys() {
+  const masked = key ? key.slice(0,12)+"••••••••••••"+key.slice(-4) : "—";
+  return title("API Keys","Authentication secrets for your 4N DEV applications.")+
+  '<div class="card key-card"><div class="section-head"><div><span class="eyebrow">SECRET CREDENTIAL</span><h2>Developer API key</h2><p class="muted small">This browser currently has one connected developer key.</p></div><span class="pill ok">ACTIVE</span></div><div class="key-display">'+esc(masked)+'</div><div class="toolbar"><button id="copyKey" class="ghost" type="button">Copy key</button><button id="forgetKey" class="danger" type="button">Remove from this device</button></div></div>'+
+  '<div class="section"><div class="grid2"><div class="card"><h3>Server integration</h3><p class="muted small">Recommended:</p><pre class="code">FOURN_DEV_API_KEY=4ndev_sk_...</pre><p class="muted small">Read the key from your server environment. Never expose it in client-side JavaScript.</p></div><div class="card"><h3>HTTP authentication</h3><pre class="code">Authorization: Bearer 4ndev_sk_...</pre><p class="muted small">Every protected Core API endpoint uses Bearer authentication.</p></div></div></div>';
 }
-function projects(){
-  return title("Projects","Applications, files and deployments managed through 4N DEV Core.",
-  '<button class="primary" id="newProjectTop">+ New project</button>')+
-  '<div class="card"><div class="toolbar"><input id="newProjectName" class="field" style="max-width:300px" placeholder="Project name"><button id="newProject" class="primary">Create</button><button id="reloadProjects" class="ghost">Refresh</button></div><div id="projectList" style="margin-top:14px">Loading projects…</div></div><div id="projectWorkspace" class="hidden" style="margin-top:13px"></div>';
+
+function projects() {
+  return title("Projects","Create applications, manage files, build and publish them.",
+    '<button class="primary" id="newProjectTop" type="button">+ New project</button>')+
+  '<div class="card"><div class="section-head"><div><h2>Your projects</h2><p class="muted small">Projects are isolated by developer API key.</p></div><button id="reloadProjects" class="ghost" type="button">Refresh</button></div><div class="toolbar create-row"><input id="newProjectName" class="field" maxlength="120" placeholder="Project name"><button id="newProject" class="primary" type="button">Create project</button></div><div id="projectList" class="project-list">Loading projects…</div></div><div id="projectWorkspace" class="hidden section"></div>';
 }
-function usage(){
-  return title("Usage","Monitor API activity and credit consumption.")+
-  '<div class="grid3">'+stat("Credits remaining",money(me?.credits),"Current balance","✦")+stat("Plan",(me?.plan||"free").toUpperCase(),"Current plan","◆")+'<div class="card stat-card"><div class="stat-label"><span>API status</span><span class="badge green">ONLINE</span></div><div class="stat-value">Healthy</div><div class="stat-foot">4N DEV Core API</div></div></div>'+
-  '<div class="section"><div class="section-head"><h2>Recent activity</h2><button id="refreshUsage" class="ghost">Refresh</button></div><div class="card"><div id="usageList">Loading usage…</div></div></div>';
+
+function builder() {
+  return title("Builder","Describe an application and let 4N DEV plan, generate, review, build and deploy it.")+
+  '<div class="builder-grid"><div class="card stack"><div class="section-head"><div><span class="eyebrow">AI APPLICATION BUILDER</span><h2>Build brief</h2></div><span class="pill">CODING CREDITS</span></div><label>Project name<input id="projectName" class="field" maxlength="120" placeholder="e.g. My Business App"></label><label>What should we build?<textarea id="builderPrompt" rows="15" maxlength="24000" placeholder="Example: Build a modern business dashboard with Dashboard, Clients, Invoices and Settings. Make it mobile-first, professional and ready to deploy."></textarea></label><div class="toolbar"><button id="planBtn" class="ghost" type="button">01 · Prepare plan</button><button id="buildBtn" class="primary" type="button">02 · Generate + Build + Deploy →</button></div><span id="builderStatus" class="status"></span><div class="hint">Builder includes quality review and automatic repair before the final build.</div></div><div class="card"><div class="section-head"><div><h2>Build output</h2><p class="muted small">Planner, files, build and deployment status.</p></div></div><pre id="planOutput" class="output hidden"></pre><div id="buildOutput" class="output">Your Builder results will appear here.</div></div></div>';
 }
-function builder(){
-  return title("Builder","Turn an app description into a project, then review, build and deploy it.")+
-  '<div class="grid2"><div class="card stack"><div class="section-head" style="margin:0"><h2>Build brief</h2><span class="pill">Core Builder</span></div><input id="projectName" class="field" placeholder="Project name (optional)"><textarea id="builderPrompt" rows="12" placeholder="Example: Build a small business website with Dashboard, Clients, Invoices and Settings…"></textarea><div class="toolbar"><button id="planBtn" class="ghost">1. Prepare plan</button><button id="buildBtn" class="primary">2. Generate + Build →</button></div><span id="builderStatus" class="status"></span></div><div class="card"><div class="section-head" style="margin:0 0 10px"><h2>Builder output</h2></div><div id="planOutput" class="output hidden"></div><div id="buildOutput" class="output">Your generated plan and build results will appear here.</div></div></div>';
+
+function deployments() {
+  return title("Deployments","Published applications and deployment history.")+
+  '<div class="card"><div class="section-head"><div><h2>Published applications</h2><p class="muted small">Deployments created from your projects.</p></div><button id="refreshDeployments" class="ghost" type="button">Refresh</button></div><div id="deploymentList">Loading deployments…</div></div>';
 }
-function docs(){
-  return title("Documentation","Start with authentication, models and the Core API.")+
-  '<div class="grid3">'+actionCard("01","Authentication","Send your API key as a Bearer token.","apiKeys","View API key")+actionCard("02","Models","Choose Chat, Coding, Image or Embeddings.","models","View models")+actionCard("03","Projects","Create, edit, build and deploy application files.","projects","View projects")+'</div>'+
-  '<div class="section"><div class="section-head"><h2>First request</h2><span class="pill">POST /v1/chat</span></div><div class="card"><div class="code">curl https://fourn-dev-core.onrender.com/v1/chat \\\n  -H "Authorization: Bearer 4ndev_sk_..." \\\n  -H "Content-Type: application/json" \\\n  -d '{"input":"Hello 4N DEV"}'</div></div></div>'+
-  '<div class="section"><div class="section-head"><h2>Core API surface</h2></div><div class="card"><table class="table"><tbody><tr><td>Chat</td><td class="endpoint">POST /v1/chat</td></tr><tr><td>Coding</td><td class="endpoint">POST /v1/coding</td></tr><tr><td>Image</td><td class="endpoint">POST /v1/image</td></tr><tr><td>Embeddings</td><td class="endpoint">POST /v1/embeddings</td></tr><tr><td>Projects</td><td class="endpoint">/v1/projects</td></tr><tr><td>Usage</td><td class="endpoint">GET /v1/usage</td></tr></tbody></table></div></div>';
+
+function usage() {
+  return title("Usage","Track API activity, credit consumption and service calls.")+
+  '<div class="grid4">'+stat("Credits",money(me?.credits),"Current balance","✦")+stat("Plan",(me?.plan||"free").toUpperCase(),"Current plan","◆")+stat("API status","Healthy","Core API","◈")+stat("Billing","Ready","Credit-based platform","₿")+'</div>'+
+  '<div class="section"><div class="section-head"><div><h2>Activity</h2><p class="muted small">Recent authenticated requests.</p></div><button id="refreshUsage" class="ghost" type="button">Refresh</button></div><div class="card table-wrap"><div id="usageList">Loading usage…</div></div></div>';
 }
-function billing(){
-  return title("Billing","Plans, credits and developer payments.")+
+
+function billing() {
+  return title("Billing","Plans, credits, orders and payment checkout.")+
   '<div class="grid3">'+stat("Current plan",(me?.plan||"free").toUpperCase(),"Developer plan","◆")+stat("Credits",money(me?.credits),"Remaining balance","✦")+stat("Currency","MGA","Malagasy Ariary","◇")+'</div>'+
-  '<div class="section"><div class="section-head"><h2>Available plans</h2></div><div id="plans" class="grid3">Loading plans…</div></div>'+
-  '<div class="section"><div class="section-head"><h2>Orders</h2></div><div class="card"><div id="orders">Loading orders…</div></div></div>';
+  '<div class="section"><div class="section-head"><div><h2>Plans</h2><p class="muted small">Choose the capacity your application needs.</p></div></div><div id="plans" class="plans-grid">Loading plans…</div></div>'+
+  '<div class="section"><div class="section-head"><h2>Orders</h2><button id="refreshOrders" class="ghost" type="button">Refresh</button></div><div class="card"><div id="orders">Loading orders…</div></div></div>';
 }
-function settings(){
-  return title("Settings","Developer account, access and local console preferences.")+
-  '<div class="grid2"><div class="card"><div class="section-head" style="margin:0"><h2>Developer account</h2><span class="pill ok">ACTIVE</span></div><div class="settings-row"><span>Name</span><b>'+esc(me?.name||"—")+'</b></div><div class="settings-row"><span>Account ID</span><b>'+esc(me?.id||"—")+'</b></div><div class="settings-row"><span>Plan</span><b>'+esc(me?.plan||"—")+'</b></div><div class="settings-row"><span>Credits</span><b>'+esc(me?.credits??"—")+'</b></div><div class="settings-row"><span>Scopes</span><b>'+esc((me?.scopes||[]).join(", ")||"—")+'</b></div></div><div class="card"><h2>Security</h2><p class="muted small">Your connected secret is stored in this browser only when you continue into the console. It is never sent to the UI as plain text by the account endpoint.</p><button id="settingsLogout" class="danger">Disconnect this device</button></div></div>';
+
+function docs() {
+  return title("Documentation","Everything a developer needs to integrate the 4N DEV Core API.")+
+  '<div class="docs-grid"><div class="card doc-card"><span class="doc-number">01</span><h3>Authentication</h3><p class="muted small">Use the developer secret as a Bearer token.</p><pre class="code">Authorization: Bearer 4ndev_sk_...</pre></div><div class="card doc-card"><span class="doc-number">02</span><h3>Make a request</h3><p class="muted small">Start with Chat, Coding, Image or Embeddings.</p><pre class="code">POST /v1/chat
+Content-Type: application/json</pre></div><div class="card doc-card"><span class="doc-number">03</span><h3>Handle usage</h3><p class="muted small">Monitor credits from the Usage page or API.</p><pre class="code">GET /v1/usage</pre></div></div>'+
+  '<div class="section"><div class="section-head"><h2>JavaScript / Node.js</h2><button class="ghost copy-snippet" data-snippet="js">Copy example</button></div><pre class="code large-code">const response = await fetch("https://fourn-dev-core.onrender.com/v1/chat", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer " + process.env.FOURN_DEV_API_KEY,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ input: "Hello from my app" })
+});
+
+const data = await response.json();</pre></div>'+
+  '<div class="section"><div class="section-head"><h2>Python</h2><button class="ghost copy-snippet" data-snippet="py">Copy example</button></div><pre class="code large-code">import os
+import requests
+
+response = requests.post(
+    "https://fourn-dev-core.onrender.com/v1/chat",
+    headers={
+        "Authorization": "Bearer " + os.environ["FOURN_DEV_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    json={"input": "Hello from my app"},
+)
+
+print(response.json())</pre></div>'+
+  '<div class="section"><div class="section-head"><h2>API reference</h2></div><div class="card table-wrap"><table class="table"><thead><tr><th>Resource</th><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead><tbody>'+
+  '<tr><td>Chat</td><td>POST</td><td class="endpoint">/v1/chat</td><td>Conversational AI</td></tr>'+
+  '<tr><td>Coding</td><td>POST</td><td class="endpoint">/v1/coding</td><td>Code assistance</td></tr>'+
+  '<tr><td>Image</td><td>POST</td><td class="endpoint">/v1/image</td><td>Image generation</td></tr>'+
+  '<tr><td>Embeddings</td><td>POST</td><td class="endpoint">/v1/embeddings</td><td>Vector embeddings</td></tr>'+
+  '<tr><td>Projects</td><td>GET/POST</td><td class="endpoint">/v1/projects</td><td>Application projects</td></tr>'+
+  '<tr><td>Files</td><td>GET/POST/PUT/DELETE</td><td class="endpoint">/v1/projects/:id/files</td><td>Project files</td></tr>'+
+  '<tr><td>Builder</td><td>POST</td><td class="endpoint">/v1/builder</td><td>Generate + build + deploy</td></tr>'+
+  '<tr><td>Builds</td><td>POST/GET</td><td class="endpoint">/v1/builds</td><td>Build projects</td></tr>'+
+  '<tr><td>Deployments</td><td>POST/GET</td><td class="endpoint">/v1/hosting/deployments</td><td>Publish projects</td></tr>'+
+  '<tr><td>Usage</td><td>GET</td><td class="endpoint">/v1/usage</td><td>Usage history</td></tr>'+
+  '</tbody></table></div></div>';
 }
-function bind(p){
-  document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>show(b.dataset.go)));
-  if(p==="models")document.querySelectorAll(".use-model").forEach(b=>b.addEventListener("click",()=>{show("playground");setTimeout(()=>{$("#playModel").value=b.dataset.model},0)}));
-  if(p==="playground")$("#playRun").addEventListener("click",runPlayground);
-  if(p==="apiKeys"){$("#copyKey").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(key);alert("API key copied.")}catch{alert("Copy is unavailable on this browser.")}});$("#forgetKey").addEventListener("click",logoutDeveloper)}
-  if(p==="projects"){$("#newProject").addEventListener("click",createProjectUI);$("#reloadProjects").addEventListener("click",loadProjects);$("#newProjectTop").addEventListener("click",()=>$("#newProjectName").focus());loadProjects()}
-  if(p==="usage"){$("#refreshUsage").addEventListener("click",loadUsage);loadUsage()}
-  if(p==="builder"){$("#planBtn").addEventListener("click",planBuilder);$("#buildBtn").addEventListener("click",buildBuilder)}
-  if(p==="billing"){loadPlans();loadOrders()}
-  if(p==="settings")$("#settingsLogout").addEventListener("click",logoutDeveloper);
+
+function settings() {
+  return title("Settings","Developer account and local console security.")+
+  '<div class="grid2"><div class="card"><div class="section-head"><h2>Developer account</h2><span class="pill ok">ACTIVE</span></div>'+
+  '<div class="settings-row"><span>Name</span><b>'+esc(me?.name || "—")+'</b></div>'+
+  '<div class="settings-row"><span>Account ID</span><b class="mono">'+esc(me?.id || "—")+'</b></div>'+
+  '<div class="settings-row"><span>Plan</span><b>'+esc(me?.plan || "—")+'</b></div>'+
+  '<div class="settings-row"><span>Credits</span><b>'+esc(me?.credits ?? "—")+'</b></div>'+
+  '<div class="settings-row"><span>Scopes</span><b>'+esc((me?.scopes || []).join(", ") || "—")+'</b></div></div>'+
+  '<div class="card"><div class="section-head"><h2>Security</h2></div><p class="muted small">Your API key is stored in this browser only after you explicitly continue into the Developer Console. Do not use browser storage for production application secrets.</p><div class="security-list"><div>✓ Bearer authentication</div><div>✓ API key never shown by /v1/me</div><div>✓ Protected project isolation</div><div>✓ Input and path validation</div></div><button id="settingsLogout" class="danger" type="button">Disconnect this device</button></div></div>';
 }
-async function runPlayground(){
-  const kind=$("#playModel").value,input=$("#playInput").value.trim();if(!input)return;
-  $("#playState").textContent="Running…";$("#playOutput").textContent="Waiting for Core API…";
-  try{
-    let d;
-    if(kind==="image")d=await api("/v1/image",{method:"POST",body:JSON.stringify({prompt:input,quality:"medium"})});
-    else d=await api("/v1/"+kind,{method:"POST",body:JSON.stringify({input})});
-    $("#playOutput").textContent=d.output||d.text||d.response||JSON.stringify(d,null,2);$("#playState").textContent="Completed";await refreshMe();
-  }catch(e){$("#playOutput").textContent="Error: "+e.message;$("#playState").textContent="Error"}
+
+const pages = {overview,models,playground,apiKeys,projects,builder,deployments,usage,billing,docs,settings};
+
+function show(page) {
+  const render = pages[page] || overview;
+  $$(".nav").forEach(nav => nav.classList.toggle("active", nav.dataset.page === page));
+  $("#main").innerHTML = render();
+  $("#sidebar")?.classList.remove("open");
+  bind(page);
+  window.scrollTo({top:0, behavior:"smooth"});
 }
-async function planBuilder(){
-  const p=$("#builderPrompt").value.trim();if(!p)return;
-  $("#builderStatus").textContent="Preparing plan…";
-  try{const d=await api("/v1/builder/plan",{method:"POST",body:JSON.stringify({prompt:p})});lastBuilderPlan=d.plan||null;$("#planOutput").classList.remove("hidden");$("#planOutput").textContent=JSON.stringify(d.plan,null,2);await refreshMe()}catch(e){$("#planOutput").classList.remove("hidden");$("#planOutput").textContent="Error: "+e.message}finally{$("#builderStatus").textContent=""}
+
+function bind(page) {
+  $$("[data-go]").forEach(button => button.addEventListener("click", () => show(button.dataset.go)));
+
+  if (page === "models") {
+    $$(".use-model").forEach(button => button.addEventListener("click", () => {
+      show("playground");
+      setTimeout(() => { if ($("#playModel")) $("#playModel").value = button.dataset.model; }, 50);
+    }));
+  }
+  if (page === "playground") $("#playRun")?.addEventListener("click", runPlayground);
+  if (page === "apiKeys") {
+    $("#copyKey")?.addEventListener("click", async () => toast(await copyText(key) ? "API key copied." : "Copy failed.", "success"));
+    $("#forgetKey")?.addEventListener("click", logoutDeveloper);
+  }
+  if (page === "projects") {
+    $("#newProject")?.addEventListener("click", createProjectUI);
+    $("#reloadProjects")?.addEventListener("click", loadProjects);
+    $("#newProjectTop")?.addEventListener("click", () => $("#newProjectName")?.focus());
+    loadProjects();
+  }
+  if (page === "usage") {
+    $("#refreshUsage")?.addEventListener("click", loadUsage);
+    loadUsage();
+  }
+  if (page === "builder") {
+    $("#planBtn")?.addEventListener("click", planBuilder);
+    $("#buildBtn")?.addEventListener("click", buildBuilder);
+  }
+  if (page === "deployments") {
+    $("#refreshDeployments")?.addEventListener("click", loadDeployments);
+    loadDeployments();
+  }
+  if (page === "billing") {
+    $("#refreshOrders")?.addEventListener("click", loadOrders);
+    loadPlans(); loadOrders();
+  }
+  if (page === "docs") {
+    $$(".copy-snippet").forEach(button => button.addEventListener("click", async () => {
+      const text = button.dataset.snippet === "py"
+        ? 'import os\nimport requests\n\nresponse = requests.post("https://fourn-dev-core.onrender.com/v1/chat", headers={"Authorization":"Bearer "+os.environ["FOURN_DEV_API_KEY"],"Content-Type":"application/json"}, json={"input":"Hello"})'
+        : 'const response = await fetch("https://fourn-dev-core.onrender.com/v1/chat", {method:"POST", headers:{"Authorization":"Bearer "+process.env.FOURN_DEV_API_KEY,"Content-Type":"application/json"}, body:JSON.stringify({input:"Hello"})});';
+      toast(await copyText(text) ? "Example copied." : "Copy failed.", "success");
+    }));
+  }
+  if (page === "settings") $("#settingsLogout")?.addEventListener("click", logoutDeveloper);
 }
-async function buildBuilder(){
-  const p=$("#builderPrompt").value.trim();if(!p)return;
-  $("#builderStatus").textContent="Generating, reviewing, building and deploying…";
-  try{
-    const d=await api("/v1/builder",{method:"POST",body:JSON.stringify({prompt:p,projectName:$("#projectName").value.trim(),plan:lastBuilderPlan})});
-    const url=d.deployment?.url?(d.deployment.url.startsWith("http")?d.deployment.url:API+d.deployment.url):"";
-    $("#buildOutput").innerHTML='<div class="notice"><b>'+esc(d.summary||"Project generated")+'</b><br><br>Build: '+esc(d.build?.status||"—")+' · Files: '+esc(d.files?.length||0)+' · Review: '+(d.review?.passed?"passed":"failed")+(url?'<br><br><a class="link" href="'+esc(url)+'" target="_blank">Open deployed site →</a>':"")+'</div>';
-    await refreshMe();if($("#projectList"))loadProjects();
-  }catch(e){$("#buildOutput").textContent="Error: "+e.message}finally{$("#builderStatus").textContent=""}
+
+async function runPlayground() {
+  const kind = $("#playModel")?.value;
+  const input = $("#playInput")?.value.trim();
+  if (!input) return toast("Enter a prompt first.", "error");
+  $("#playState").textContent = "RUNNING";
+  $("#playOutput").textContent = "Waiting for 4N DEV Core…";
+  try {
+    let data;
+    if (kind === "image") data = await api("/v1/image",{method:"POST",body:JSON.stringify({prompt:input,quality:"medium"})});
+    else if (kind === "embeddings") data = await api("/v1/embeddings",{method:"POST",body:JSON.stringify({input})});
+    else data = await api("/v1/"+kind,{method:"POST",body:JSON.stringify({input})});
+    $("#playOutput").textContent = data.output || data.text || data.response || JSON.stringify(data,null,2);
+    $("#playState").textContent = "COMPLETED";
+    await refreshMe();
+    toast("Request completed.", "success");
+  } catch (error) {
+    $("#playOutput").textContent = "Error: " + error.message;
+    $("#playState").textContent = "ERROR";
+    toast(error.message, "error");
+  }
 }
-async function loadProjects(){
-  try{
-    const d=await api("/v1/projects");
-    $("#projectList").innerHTML=d.projects?.length?d.projects.map(p=>'<div class="project-row"><div><strong>'+esc(p.name)+'</strong><div class="muted small">'+esc(p.description||"No description")+'</div></div><div class="toolbar"><button class="ghost open-project" data-id="'+esc(p.id)+'">Open</button><button class="danger delete-project" data-id="'+esc(p.id)+'">Delete</button></div></div>').join(""):'<div class="empty">No projects yet. Create your first application above.</div>';
-    document.querySelectorAll(".open-project").forEach(b=>b.addEventListener("click",()=>openProject(b.dataset.id)));
-    document.querySelectorAll(".delete-project").forEach(b=>b.addEventListener("click",()=>deleteProject(b.dataset.id)));
-  }catch(e){$("#projectList").textContent="Error: "+e.message}
+
+async function planBuilder() {
+  const prompt = $("#builderPrompt")?.value.trim();
+  if (!prompt) return toast("Describe the application you want to build.", "error");
+  const button = $("#planBtn");
+  button.disabled = true;
+  $("#builderStatus").textContent = "Preparing the application plan…";
+  try {
+    const data = await api("/v1/builder/plan",{method:"POST",body:JSON.stringify({prompt})});
+    lastBuilderPlan = data.plan || null;
+    $("#planOutput").classList.remove("hidden");
+    $("#planOutput").textContent = JSON.stringify(data.plan,null,2);
+    await refreshMe();
+    toast("Builder plan ready.", "success");
+  } catch (error) {
+    $("#planOutput").classList.remove("hidden");
+    $("#planOutput").textContent = "Error: " + error.message;
+    toast(error.message,"error");
+  } finally {
+    button.disabled = false;
+    $("#builderStatus").textContent = "";
+  }
 }
-async function createProjectUI(){
-  const name=$("#newProjectName").value.trim();if(!name)return;
-  try{await api("/v1/projects",{method:"POST",body:JSON.stringify({name})});$("#newProjectName").value="";loadProjects()}catch(e){alert(e.message)}
+
+async function buildBuilder() {
+  const prompt = $("#builderPrompt")?.value.trim();
+  if (!prompt) return toast("Describe the application first.", "error");
+  const button = $("#buildBtn");
+  button.disabled = true;
+  $("#builderStatus").textContent = "Generating → reviewing → building → deploying…";
+  try {
+    const data = await api("/v1/builder",{method:"POST",body:JSON.stringify({
+      prompt,
+      projectName:$("#projectName")?.value.trim() || "",
+      plan:lastBuilderPlan
+    }});
+    lastBuild = data;
+    const deploymentUrl = data.deployment?.url
+      ? (data.deployment.url.startsWith("http") ? data.deployment.url : API + data.deployment.url)
+      : "";
+    $("#buildOutput").innerHTML =
+      '<div class="result-summary"><div class="result-icon">✓</div><div><h3>Application built successfully</h3><p>'+esc(data.summary || "Builder completed the project.")+'</p></div></div>'+
+      '<div class="result-grid">'+
+      '<div><span>Project</span><b>'+esc(data.project?.name || "—")+'</b></div>'+
+      '<div><span>Files</span><b>'+esc(data.files?.length || 0)+'</b></div>'+
+      '<div><span>Build</span><b>'+esc(data.build?.status || "—")+'</b></div>'+
+      '<div><span>Review</span><b>'+esc(data.review?.passed ? "Passed" : "Failed")+'</b></div>'+
+      '</div>'+
+      (deploymentUrl ? '<a class="primary inline-button" target="_blank" rel="noopener" href="'+esc(deploymentUrl)+'">Open deployed site ↗</a>' : "");
+    await refreshMe();
+    toast("Builder deployment completed.", "success");
+  } catch (error) {
+    $("#buildOutput").textContent = "Error: " + error.message;
+    toast(error.message,"error");
+  } finally {
+    button.disabled = false;
+    $("#builderStatus").textContent = "";
+  }
 }
-async function deleteProject(id){
-  if(!confirm("Delete this project?"))return;
-  try{await api("/v1/projects/"+encodeURIComponent(id),{method:"DELETE"});$("#projectWorkspace").classList.add("hidden");loadProjects()}catch(e){alert(e.message)}
+
+async function loadProjects() {
+  try {
+    const data = await api("/v1/projects");
+    const list = data.projects || [];
+    $("#projectList").innerHTML = list.length ? list.map(project =>
+      '<div class="project-row"><div class="project-main"><div class="project-symbol">□</div><div><strong>'+esc(project.name)+'</strong><p>'+esc(project.description || "No description")+'</p><span class="mono">'+esc(project.id)+'</span></div></div><div class="toolbar"><button class="ghost open-project" data-id="'+esc(project.id)+'" type="button">Open</button><button class="danger delete-project" data-id="'+esc(project.id)+'" type="button">Delete</button></div></div>'
+    ).join("") : '<div class="empty">No projects yet. Create your first application above.</div>';
+    $$(".open-project").forEach(button => button.addEventListener("click", () => openProject(button.dataset.id)));
+    $$(".delete-project").forEach(button => button.addEventListener("click", () => deleteProject(button.dataset.id)));
+  } catch (error) {
+    $("#projectList").textContent = "Error: " + error.message;
+  }
 }
-async function openProject(id){
-  try{const d=await api("/v1/projects/"+encodeURIComponent(id));currentProject=d.project;const f=await api("/v1/projects/"+encodeURIComponent(id)+"/files");currentFiles=f.files||[];renderProjectWorkspace()}catch(e){alert(e.message)}
+
+async function createProjectUI() {
+  const name = $("#newProjectName")?.value.trim();
+  if (!name) return toast("Enter a project name.", "error");
+  try {
+    await api("/v1/projects",{method:"POST",body:JSON.stringify({name})});
+    $("#newProjectName").value = "";
+    await loadProjects();
+    toast("Project created.", "success");
+  } catch (error) { toast(error.message,"error"); }
 }
-function renderProjectWorkspace(){
-  const p=currentProject,w=$("#projectWorkspace");w.classList.remove("hidden");
-  w.innerHTML='<div class="card stack"><div class="toolbar"><div style="margin-right:auto"><h3 style="margin:0">'+esc(p.name)+'</h3><span class="muted small">'+esc(p.id)+'</span></div><button id="buildProject" class="ghost">Build</button><button id="deployProject" class="primary">Deploy</button></div><div class="grid2"><div><div class="section-head"><h2>Files</h2></div><div id="fileList">'+(currentFiles.length?currentFiles.map(f=>'<div class="file-row"><button class="ghost file-open" data-id="'+esc(f.id)+'">'+esc(f.path)+'</button><span class="muted small">'+f.content.length+' chars</span></div>').join(""):'<div class="empty">No files.</div>')+'</div></div><div><div class="section-head"><h2>Editor</h2></div><input id="filePath" class="field" placeholder="index.html"><textarea id="fileContent" class="file-editor" placeholder="File content…"></textarea><div class="toolbar" style="margin-top:8px"><button id="saveFile" class="primary">Save file</button><button id="newFile" class="ghost">New file</button></div><div id="fileStatus" class="status"></div></div></div><div id="deployOutput"></div></div>';
-  document.querySelectorAll(".file-open").forEach(b=>b.addEventListener("click",()=>editFile(b.dataset.id)));
-  $("#saveFile").addEventListener("click",saveFile);$("#newFile").addEventListener("click",()=>{$("#filePath").value="";$("#fileContent").value="";delete $("#saveFile").dataset.id});
-  $("#buildProject").addEventListener("click",buildProjectUI);$("#deployProject").addEventListener("click",deployProject);
+
+async function deleteProject(id) {
+  if (!confirm("Delete this project? This action cannot be undone.")) return;
+  try {
+    await api("/v1/projects/"+encodeURIComponent(id),{method:"DELETE"});
+    $("#projectWorkspace")?.classList.add("hidden");
+    await loadProjects();
+    toast("Project deleted.","success");
+  } catch (error) { toast(error.message,"error"); }
 }
-function editFile(id){const f=currentFiles.find(x=>x.id===id);if(f){$("#filePath").value=f.path;$("#fileContent").value=f.content;$("#saveFile").dataset.id=f.id}}
-async function saveFile(){
-  const path=$("#filePath").value.trim(),content=$("#fileContent").value;if(!path)return;
-  try{const id=$("#saveFile").dataset.id;if(id)await api("/v1/projects/"+currentProject.id+"/files/"+id,{method:"PUT",body:JSON.stringify({path,content})});else await api("/v1/projects/"+currentProject.id+"/files",{method:"POST",body:JSON.stringify({path,content})});$("#fileStatus").textContent="Saved.";openProject(currentProject.id)}catch(e){$("#fileStatus").textContent="Error: "+e.message}
+
+async function openProject(id) {
+  try {
+    const project = await api("/v1/projects/"+encodeURIComponent(id));
+    const files = await api("/v1/projects/"+encodeURIComponent(id)+"/files");
+    currentProject = project.project;
+    currentFiles = files.files || [];
+    renderProjectWorkspace();
+  } catch (error) { toast(error.message,"error"); }
 }
-async function buildProjectUI(){try{const d=await api("/v1/builds",{method:"POST",body:JSON.stringify({projectId:currentProject.id})});$("#deployOutput").innerHTML='<div class="notice">Build '+esc(d.build.status)+' · '+esc(d.build.fileCount)+' files</div>'}catch(e){$("#deployOutput").textContent="Error: "+e.message}}
-async function deployProject(){try{const d=await api("/v1/hosting/deployments",{method:"POST",body:JSON.stringify({projectId:currentProject.id})});const url=d.deployment.url.startsWith("http")?d.deployment.url:API+d.deployment.url;$("#deployOutput").innerHTML='<div class="notice">Deployment: '+esc(d.deployment.status)+' — <a class="link" target="_blank" href="'+esc(url)+'">Open site →</a></div>'}catch(e){$("#deployOutput").textContent="Error: "+e.message}}
-async function loadUsage(){
-  try{
-    const d=await api("/v1/usage"),rows=d.usage||[];
-    $("#usageList").innerHTML=rows.length?rows.map(x=>'<div class="activity-row"><div><strong>'+esc(x.endpoint||x.service||"API request")+'</strong><div class="muted small">'+esc(x.createdAt||x.timestamp||"")+'</div></div><span class="pill">'+esc(x.credits_used??0)+' credits</span></div>').join(""):'<div class="empty">No usage records yet.</div>';
-  }catch(e){$("#usageList").textContent="Error: "+e.message}
+
+function renderProjectWorkspace() {
+  const target = $("#projectWorkspace");
+  if (!target || !currentProject) return;
+  target.classList.remove("hidden");
+  target.innerHTML =
+    '<div class="card"><div class="section-head"><div><span class="eyebrow">PROJECT WORKSPACE</span><h2>'+esc(currentProject.name)+'</h2><p class="muted small">'+esc(currentProject.description || "")+'</p></div><div class="toolbar"><button id="buildProject" class="ghost" type="button">Build</button><button id="deployProject" class="primary" type="button">Deploy</button></div></div>'+
+    '<div class="workspace-grid"><div><div class="section-head"><h3>Files</h3><span class="pill">'+currentFiles.length+' files</span></div><div id="fileList">'+
+    (currentFiles.length ? currentFiles.map(file => '<div class="file-row"><button class="file-open" data-id="'+esc(file.id)+'" type="button">'+esc(file.path)+'</button><span>'+money(file.content?.length || 0)+' chars</span></div>').join("") : '<div class="empty">No files yet.</div>')+
+    '</div></div><div><div class="section-head"><h3>Editor</h3><span id="fileStatus" class="status"></span></div><input id="filePath" class="field" placeholder="index.html"><textarea id="fileContent" class="file-editor" placeholder="File content…"></textarea><div class="toolbar"><button id="saveFile" class="primary" type="button">Save file</button><button id="newFile" class="ghost" type="button">New file</button></div></div></div><div id="deployOutput" class="workspace-output"></div></div>';
+  $$(".file-open").forEach(button => button.addEventListener("click", () => editFile(button.dataset.id)));
+  $("#saveFile")?.addEventListener("click", saveFile);
+  $("#newFile")?.addEventListener("click", () => { $("#filePath").value=""; $("#fileContent").value=""; delete $("#saveFile").dataset.id; });
+  $("#buildProject")?.addEventListener("click", buildProjectUI);
+  $("#deployProject")?.addEventListener("click", deployProject);
 }
-async function loadPlans(){
-  try{
-    const d=await api("/v1/billing/plans");
-    $("#plans").innerHTML=(d.plans||[]).map(p=>'<div class="card"><span class="pill">'+esc(p.id)+'</span><h3 style="margin:14px 0 0">'+esc(p.name)+'</h3><div class="price">'+money(p.prices?.MGA||0)+' Ar</div><div class="muted small">'+money(p.credits)+' credits / month</div><ul>'+(p.features||[]).map(f=>"<li>"+esc(f)+"</li>").join("")+'</ul>'+(p.id==="free"?"":'<button class="primary buy" data-plan="'+esc(p.id)+'">Choose plan →</button>')+'</div>').join("");
-    document.querySelectorAll(".buy").forEach(b=>b.addEventListener("click",()=>startOrder(b.dataset.plan)));
-  }catch(e){$("#plans").textContent="Error: "+e.message}
+
+function editFile(id) {
+  const file = currentFiles.find(item => item.id === id);
+  if (!file) return;
+  $("#filePath").value = file.path;
+  $("#fileContent").value = file.content;
+  $("#saveFile").dataset.id = file.id;
 }
-async function loadOrders(){
-  try{const d=await api("/v1/billing/orders");$("#orders").innerHTML=d.orders?.length?d.orders.map(o=>'<div class="order-row"><div><strong>'+esc(o.planId||o.plan_id)+'</strong><div class="muted small">'+esc(o.currency)+' '+esc(o.amount)+' · '+esc(o.status)+'</div></div><span class="muted small">'+esc(o.id)+'</span></div>').join(""):'<div class="empty">No billing orders yet.</div>'}catch(e){$("#orders").textContent="Error: "+e.message}
+
+async function saveFile() {
+  const path = $("#filePath")?.value.trim();
+  const content = $("#fileContent")?.value ?? "";
+  if (!path) return toast("Enter a file path.", "error");
+  try {
+    const fileId = $("#saveFile").dataset.id;
+    const base = "/v1/projects/"+encodeURIComponent(currentProject.id)+"/files";
+    if (fileId) await api(base+"/"+encodeURIComponent(fileId),{method:"PUT",body:JSON.stringify({path,content})});
+    else await api(base,{method:"POST",body:JSON.stringify({path,content})});
+    await openProject(currentProject.id);
+    toast("File saved.","success");
+  } catch (error) {
+    $("#fileStatus").textContent = "Error: " + error.message;
+  }
 }
-async function startOrder(planId){
-  try{const o=await api("/v1/billing/orders",{method:"POST",body:JSON.stringify({planId,currency:"MGA"})});const c=await api("/v1/billing/orders/"+o.order.id+"/checkout",{method:"POST",body:JSON.stringify({provider:"papi"})});if(c.checkout?.paymentLink)location.href=c.checkout.paymentLink;else alert("Checkout created but no payment link was returned.")}catch(e){alert(e.message)}
+
+async function buildProjectUI() {
+  const output = $("#deployOutput");
+  try {
+    const data = await api("/v1/builds",{method:"POST",body:JSON.stringify({projectId:currentProject.id})});
+    output.innerHTML = '<div class="notice">Build <b>'+esc(data.build.status)+'</b> · '+esc(data.build.fileCount)+' files · entrypoint '+esc(data.build.entrypoint || "index.html")+'</div>';
+    toast("Project built.","success");
+  } catch (error) { output.textContent = "Error: " + error.message; }
 }
-function initFrontend(){
-  const create=$("#createKeyBtn"),copy=$("#copyCreatedKey"),cont=$("#continueConsoleBtn"),logout=$("#logoutBtn"),mobile=$("#mobileNav");
-  if(create)create.addEventListener("click",createDeveloperKey);
-  if(copy)copy.addEventListener("click",copyCreatedKey);
-  if(cont)cont.addEventListener("click",continueToConsole);
-  if(logout)logout.addEventListener("click",logoutDeveloper);
-  $("#developerName")?.addEventListener("keydown",e=>{if(e.key==="Enter")createDeveloperKey()});
-  if(mobile)mobile.addEventListener("click",()=>$("#sidebar").classList.toggle("open"));
-  document.querySelectorAll(".nav").forEach(n=>n.addEventListener("click",()=>show(n.dataset.page)));
-  $("#brandHome")?.addEventListener("click",e=>{e.preventDefault();show("overview")});
-  if(key)showConsole();else showOnboarding();
+
+async function deployProject() {
+  const output = $("#deployOutput");
+  try {
+    const data = await api("/v1/hosting/deployments",{method:"POST",body:JSON.stringify({projectId:currentProject.id})});
+    const raw = data.deployment?.url || "";
+    const url = raw.startsWith("http") ? raw : API + raw;
+    output.innerHTML = '<div class="notice">Deployment <b>'+esc(data.deployment?.status || "created")+'</b> · <a class="link" target="_blank" rel="noopener" href="'+esc(url)+'">Open published site ↗</a></div>';
+    toast("Project deployed.","success");
+  } catch (error) { output.textContent = "Error: " + error.message; }
 }
-window.addEventListener("error",e=>console.error("4N DEV frontend error:",e.error||e.message));
-document.addEventListener("DOMContentLoaded",initFrontend);
+
+async function loadDeployments() {
+  try {
+    const data = await api("/v1/hosting/deployments");
+    const list = data.deployments || [];
+    $("#deploymentList").innerHTML = list.length ? list.map(item =>
+      '<div class="deployment-row"><div><strong>'+esc(item.projectName || item.projectId)+'</strong><p><span class="pill ok">'+esc(item.status)+'</span> · version '+esc(item.version)+'</p></div><div class="toolbar"><a class="ghost link-button" target="_blank" rel="noopener" href="'+esc(item.url?.startsWith("http") ? item.url : API+item.url)+'">Open ↗</a><button class="danger unpublish" data-id="'+esc(item.id)+'" type="button">Unpublish</button></div></div>'
+    ).join("") : '<div class="empty">No deployments yet.</div>';
+    $$(".unpublish").forEach(button => button.addEventListener("click", () => deleteDeployment(button.dataset.id)));
+  } catch (error) { $("#deploymentList").textContent = "Error: " + error.message; }
+}
+
+async function deleteDeployment(id) {
+  if (!confirm("Unpublish this deployment?")) return;
+  try {
+    await api("/v1/hosting/deployments/"+encodeURIComponent(id),{method:"DELETE"});
+    await loadDeployments();
+    toast("Deployment unpublished.","success");
+  } catch (error) { toast(error.message,"error"); }
+}
+
+async function loadUsage() {
+  try {
+    const data = await api("/v1/usage");
+    const rows = data.usage || [];
+    $("#usageList").innerHTML = rows.length ? rows.map(item =>
+      '<div class="activity-row"><div><strong>'+esc(item.endpoint || item.service || "API request")+'</strong><p>'+esc(item.createdAt || item.timestamp || "")+'</p></div><span class="pill">'+esc(item.credits_used ?? 0)+' credits</span></div>'
+    ).join("") : '<div class="empty">No usage records yet. Run a request in Playground to create activity.</div>';
+  } catch (error) { $("#usageList").textContent = "Error: " + error.message; }
+}
+
+async function loadPlans() {
+  try {
+    const data = await api("/v1/billing/plans");
+    const plans = data.plans || [];
+    $("#plans").innerHTML = plans.map(plan =>
+      '<div class="card plan-card '+(plan.id === "free" ? "featured" : "")+'"><span class="pill">'+esc(plan.id.toUpperCase())+'</span><h3>'+esc(plan.name)+'</h3><div class="price">'+money(plan.prices?.MGA || 0)+' <small>Ar</small></div><p class="muted small">'+money(plan.credits)+' credits</p><ul>'+(plan.features || []).map(feature => '<li>'+esc(feature)+'</li>').join("")+'</ul>'+(plan.id === "free" ? '<span class="plan-current">Current plan</span>' : '<button class="primary buy" data-plan="'+esc(plan.id)+'" type="button">Choose '+esc(plan.name)+' →</button>')+'</div>'
+    ).join("");
+    $$(".buy").forEach(button => button.addEventListener("click", () => startOrder(button.dataset.plan)));
+  } catch (error) { $("#plans").textContent = "Error: " + error.message; }
+}
+
+async function loadOrders() {
+  try {
+    const data = await api("/v1/billing/orders");
+    const orders = data.orders || [];
+    $("#orders").innerHTML = orders.length ? orders.map(order =>
+      '<div class="order-row"><div><strong>'+esc(order.planId || order.plan_id || "Plan")+'</strong><p>'+esc(order.currency)+' '+esc(order.amount)+' · '+esc(order.status)+'</p></div><span class="mono">'+esc(order.id)+'</span></div>'
+    ).join("") : '<div class="empty">No orders yet.</div>';
+  } catch (error) { $("#orders").textContent = "Error: " + error.message; }
+}
+
+async function startOrder(planId) {
+  try {
+    const created = await api("/v1/billing/orders",{method:"POST",body:JSON.stringify({planId,currency:"MGA"})});
+    const checkout = await api("/v1/billing/orders/"+encodeURIComponent(created.order.id)+"/checkout",{method:"POST",body:JSON.stringify({provider:"papi"})});
+    if (checkout.checkout?.paymentLink) location.href = checkout.checkout.paymentLink;
+    else toast("Order created, but the payment provider did not return a checkout link yet.","info");
+    await loadOrders();
+  } catch (error) { toast(error.message,"error"); }
+}
+
+function init() {
+  const form = $("#createKeyForm");
+  form?.addEventListener("submit", createDeveloperKey);
+  $("#copyCreatedKey")?.addEventListener("click", copyCreatedKey);
+  $("#continueConsoleBtn")?.addEventListener("click", continueToConsole);
+  $("#logoutBtn")?.addEventListener("click", logoutDeveloper);
+  $("#mobileNav")?.addEventListener("click", () => $("#sidebar")?.classList.toggle("open"));
+  $("#brandHome")?.addEventListener("click", event => { event.preventDefault(); if (key) show("overview"); });
+  $("#getStartedBtn")?.addEventListener("click", focusOnboarding);
+  $("#heroGetStarted")?.addEventListener("click", focusOnboarding);
+  $("#heroDocs")?.addEventListener("click", () => {
+    $("#onboardingCard")?.scrollIntoView({behavior:"smooth",block:"center"});
+    toast("Create a key first to open the Developer Console.");
+  });
+  $("#landingBrand")?.addEventListener("click", event => { event.preventDefault(); focusOnboarding(); });
+  $("#developerName")?.addEventListener("keydown", event => { if (event.key === "Enter") form?.requestSubmit(); });
+  $$(".nav").forEach(nav => nav.addEventListener("click", () => show(nav.dataset.page)));
+
+  if (key) showConsole();
+  else showOnboarding();
+}
+
+window.addEventListener("error", event => console.error("4N DEV frontend error:", event.error || event.message));
+window.addEventListener("unhandledrejection", event => console.error("4N DEV frontend rejection:", event.reason));
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
