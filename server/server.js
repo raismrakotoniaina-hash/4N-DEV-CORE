@@ -23,6 +23,7 @@ import usageRouter from "./routes/usage.js";
 import hostingRouter from "./routes/hosting.js";
 import buildRouter from "./routes/build.js";
 import sitesRouter from "./routes/sites.js";
+import { registerKeyOnboarding } from "./routes/keyOnboarding.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
 import { checkDatabase, initializeDatabase, closeDatabase } from "./db.js";
@@ -167,6 +168,8 @@ app.get("/health/ready", async (req, res) => {
     });
   }
 });
+
+registerKeyOnboarding(app);
 
 app.get("/v1", (_req, res) => {
   res.json({
