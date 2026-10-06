@@ -99,6 +99,100 @@
 </section>
 
 <script src="/frontend/app.js?v=20261006-15" defer></script>
+<script>
+(function () {
+  function bootLandingFallback() {
+    var start = document.getElementById("getStartedBtn");
+    if (start && !start.__bound) {
+      start.__bound = true;
+      start.addEventListener("click", function () {
+        var card = document.getElementById("onboardingCard");
+        var input = document.getElementById("developerName");
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(function () { if (input) input.focus(); }, 450);
+      });
+    }
+
+    if (typeof window.__4nCreateKeyNow !== "function") {
+      window.__4nCreateKeyNow = async function (event) {
+        if (event && event.preventDefault) event.preventDefault();
+
+        var input = document.getElementById("developerName");
+        var button = document.getElementById("createKeyBtn");
+        var error = document.getElementById("createKeyError");
+        var name = input ? input.value.trim() : "";
+
+        if (error) {
+          error.textContent = "";
+          error.classList.add("hidden");
+        }
+
+        if (!name) {
+          if (error) {
+            error.textContent = "Developer or company name is required.";
+            error.classList.remove("hidden");
+          }
+          if (input) input.focus();
+          return false;
+        }
+
+        if (button) {
+          button.disabled = true;
+          button.innerHTML = "<span>Creating API key…</span><b>•</b>";
+        }
+
+        try {
+          var response = await fetch("/v1/keys/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name })
+          });
+
+          var data = {};
+          try { data = await response.json(); } catch (_) {}
+
+          if (!response.ok) {
+            throw new Error(data.error || "Unable to create API key (HTTP " + response.status + ").");
+          }
+
+          if (!data.api_key) throw new Error("The Core API did not return an API key.");
+
+          localStorage.setItem("4ndev_api_key", data.api_key);
+          sessionStorage.setItem("4ndev_new_api_key", data.api_key);
+
+          var created = document.getElementById("createdApiKey");
+          if (created) created.value = data.api_key;
+
+          var createStep = document.getElementById("createKeyStep");
+          var createdStep = document.getElementById("keyCreatedStep");
+          if (createStep) createStep.classList.add("hidden");
+          if (createdStep) createdStep.classList.remove("hidden");
+          var status = document.getElementById("copyStatus");
+          if (status) status.textContent = "Key created successfully.";
+        } catch (err) {
+          if (error) {
+            error.textContent = err.message || "Unable to create API key.";
+            error.classList.remove("hidden");
+          }
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.innerHTML = "<span>Create API key</span><b>→</b>";
+          }
+        }
+
+        return false;
+      };
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootLandingFallback);
+  } else {
+    bootLandingFallback();
+  }
+})();
+</script>
 
 </body>
 </html>
