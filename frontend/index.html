@@ -5,22 +5,37 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>4N DEV — Developer Platform</title>
-<link rel="stylesheet" href="/frontend/styles.css?v=20261006-1">
+<link rel="stylesheet" href="/frontend/styles.css?v=20261006-2">
 </head>
 <body>
 <div id="app">
-<section id="connectScreen" class="screen">
+<section id="onboardingScreen" class="screen">
   <div class="auth-brand"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Platform</small></div></div>
   <div class="connect-card">
-    <div class="eyebrow">4N DEV API</div>
-    <h1>Developer Platform</h1>
-    <p>Connectez votre compte développeur pour accéder aux modèles, API keys, projets, usage et billing.</p>
-    <label for="apiKey">Secret API key</label>
-    <div class="key-row"><input id="apiKey" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="4ndev_sk_..."><button id="toggleKey" class="icon-btn" type="button">Afficher</button></div>
-    <label class="remember"><input id="rememberKey" type="checkbox" checked> Conserver cette clé sur cet appareil</label>
-    <button id="connectBtn" class="primary full" type="button">Continuer</button>
-    <div id="connectError" class="error hidden"></div>
-    <p class="hint">La clé est utilisée uniquement pour authentifier les appels vers le 4N DEV Core API.</p>
+    <div class="eyebrow">4N DEV DEVELOPER PLATFORM</div>
+    <h1>Build with 4N DEV APIs.</h1>
+    <p>Create your developer API key to access models, projects, Builder, usage and billing.</p>
+
+    <div id="createKeyStep">
+      <label for="developerName">Developer name</label>
+      <input id="developerName" class="field" type="text" maxlength="80" autocomplete="name" placeholder="Your name or company">
+      <button id="createKeyBtn" class="primary full" type="button">Create API key</button>
+      <div id="createKeyError" class="error hidden"></div>
+      <p class="hint">A secret API key will be generated for your developer account. Keep it private.</p>
+    </div>
+
+    <div id="keyCreatedStep" class="hidden">
+      <div class="success-icon">✓</div>
+      <h2>Your API key is ready</h2>
+      <p class="muted">Copy this secret now. For security, 4N DEV will only show the full key at creation time.</p>
+      <div class="key-row">
+        <input id="createdApiKey" type="text" readonly autocomplete="off" spellcheck="false">
+        <button id="copyCreatedKey" class="icon-btn" type="button">Copy</button>
+      </div>
+      <div class="warning">⚠️ Store this key securely. Never expose it in browser JavaScript or public repositories.</div>
+      <button id="continueConsoleBtn" class="primary full" type="button">Continue to Developer Console</button>
+      <div id="copyStatus" class="status"></div>
+    </div>
   </div>
 </section>
 
@@ -28,7 +43,7 @@
 <header class="topbar">
   <button id="mobileNav" class="mobile-nav" type="button" aria-label="Menu">☰</button>
   <a class="brand" href="#" data-page="overview"><span class="brand-mark">4N</span><div><strong>4N DEV</strong><small>Developer Platform</small></div></a>
-  <div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— credits</span><button id="logoutBtn" class="ghost" type="button">Déconnexion</button></div>
+  <div class="top-actions"><span id="planBadge" class="badge">—</span><span id="creditBadge" class="credits">— credits</span><button id="logoutBtn" class="ghost" type="button">Disconnect</button></div>
 </header>
 <div class="platform">
 <aside id="sidebar" class="sidebar">
@@ -51,6 +66,6 @@
 </div>
 </section>
 </div>
-<script src="/frontend/app.js?v=20261006-1"></script>
+<script src="/frontend/app.js?v=20261006-2"></script>
 </body>
 </html>
