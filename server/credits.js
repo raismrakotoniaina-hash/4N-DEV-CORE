@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { query } from "./db.js";
+import { readStore, updateStore } from "./localStore.js";
 
 function isDatabaseConfigured() {
   return Boolean(process.env.DATABASE_URL);
@@ -12,7 +13,15 @@ function validateAmount(amount) {
 }
 
 export async function getBalance(apiKeyId) {
-  if (!isDatabaseConfigured()) return 0;
+  if (!isDatabaseConfigured()) {
+    if (apiKeyId === "core-bootstrap-key") {
+      const initialCredits = Number(process.env.CORE_API_KEY_INITIAL_CREDITS || 500);
+      return Number.isInteger(initialCredits) && initialCredits > 0 ? initialCredits : 500;
+    }
+
+    const state = await readStore();
+    return Number(state.creditAccounts[apiKeyId]?.balance || 0);
+  }
 
   const existing = await query(
     "SELECT balance FROM credit_accounts WHERE api_key_id = $1",
@@ -53,7 +62,34 @@ export async function addCredits(apiKeyId, amount, reason = "top_up") {
   validateAmount(amount);
 
   if (!isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL is required for credit storage");
+    let balance = 0;
+    await updateStore((state) => {
+      const current = Number(state.creditAccounts[apiKeyId]?.balance || 0);
+      balance = current + amount;
+      return {
+        ...state,
+        creditAccounts: {
+          ...state.creditAccounts,
+          [apiKeyId]: {
+            apiKeyId,
+            balance,
+            updatedAt: new Date().toISOString()
+          }
+        },
+        creditTransactions: [
+          ...state.creditTransactions,
+          {
+            id: crypto.randomUUID(),
+            apiKeyId,
+            type: "credit",
+            amount,
+            reason,
+            createdAt: new Date().toISOString()
+          }
+        ]
+      };
+    });
+    return balance;
   }
 
   const now = new Date();
@@ -86,7 +122,37 @@ export async function spendCredits(apiKeyId, amount, reason = "api_usage") {
   validateAmount(amount);
 
   if (!isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL is required for credit storage");
+    let balance = null;
+    await updateStore((state) => {
+      const current = Number(state.creditAccounts[apiKeyId]?.balance || 0);
+      if (current < amount) return state;
+
+      balance = current - amount;
+      return {
+        ...state,
+        creditAccounts: {
+          ...state.creditAccounts,
+          [apiKeyId]: {
+            ...state.creditAccounts[apiKeyId],
+            apiKeyId,
+            balance,
+            updatedAt: new Date().toISOString()
+          }
+        },
+        creditTransactions: [
+          ...state.creditTransactions,
+          {
+            id: crypto.randomUUID(),
+            apiKeyId,
+            type: "debit",
+            amount,
+            reason,
+            createdAt: new Date().toISOString()
+          }
+        ]
+      };
+    });
+    return balance;
   }
 
   const now = new Date();
@@ -124,7 +190,41 @@ export async function refundCredits(apiKeyId, amount, reason = "operation_refund
   validateAmount(amount);
 
   if (!isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL is required for credit storage");
+    let balance = null;
+    await updateStore((state) => {
+      const account = state.creditAccounts[apiKeyId];
+      if (!account) return state;
+
+      balance = Number(account.balance || 0) + amount;
+      return {
+        ...state,
+        creditAccounts: {
+          ...state.creditAccounts,
+          [apiKeyId]: {
+            ...account,
+            balance,
+            updatedAt: new Date().toISOString()
+          }
+        },
+        creditTransactions: [
+          ...state.creditTransactions,
+          {
+            id: crypto.randomUUID(),
+            apiKeyId,
+            type: "refund",
+            amount,
+            reason,
+            createdAt: new Date().toISOString()
+          }
+        ]
+      };
+    });
+
+    if (balance === null) {
+      throw new Error("Credit account not found for refund");
+    }
+
+    return balance;
   }
 
   const now = new Date();
@@ -162,8 +262,6 @@ export function calculateChatCredits(usage = {}) {
   const input = Number(usage.input_tokens || 0);
   const output = Number(usage.output_tokens || 0);
 
-  // 1 credit = 1,000 weighted token units.
-  // Output is weighted 3x to protect 4N DEV margin.
   const units = input + output * 3;
   return Math.max(1, Math.ceil(units / 1000));
 }
