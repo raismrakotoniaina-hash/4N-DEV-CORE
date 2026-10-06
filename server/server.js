@@ -46,10 +46,10 @@ app.use("/frontend", express.static(FRONTEND_DIR, { etag: false, lastModified: f
 // always opens the frontend and never the API health payload.
 app.get("/", (_req, res) => {
   // Redirect to the static frontend entry point so Render never serves an API payload at root.
-  res.redirect(302, "/frontend/index.html?v=20261005");
+  res.redirect(302, "/frontend/index.html?v=20261006-10");
 });
 
-app.get("/console", (_req, res) => res.redirect(302, "/frontend/index.html?v=20261005"));
+app.get("/console", (_req, res) => res.redirect(302, "/frontend/index.html?v=20261006-10"));
 
 app.use((req, res, next) => {
   const requestId = req.get("x-request-id") || createRequestId();
