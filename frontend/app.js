@@ -153,7 +153,6 @@ async function createDeveloperKey(event) {
   return false;
 }
 
-window.__4nCreateKey = createDeveloperKey;
 
 async function copyText(value) {
   try {
