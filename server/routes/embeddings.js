@@ -15,10 +15,16 @@ router.post("/embeddings", requireApiKey("embeddings"), requirePlanFeature("embe
     const { input } = req.body || {};
 
     if (typeof input !== "string" && !Array.isArray(input)) {
-      return res.status(400).json({ success: false, error: "input must be a string or an array" });
+      return res.status(400).json({
+        success: false,
+        error: "input must be a string or an array"
+      });
     }
 
-    const inputLength = typeof input === "string" ? input.length : JSON.stringify(input).length;
+    const inputLength = typeof input === "string"
+      ? input.length
+      : JSON.stringify(input).length;
+
     if (inputLength > EMBEDDING_LIMITS.maxInputCharacters) {
       return res.status(413).json({
         success: false,
@@ -27,7 +33,8 @@ router.post("/embeddings", requireApiKey("embeddings"), requirePlanFeature("embe
       });
     }
 
-    const balanceBefore = getBalance(req.apiKey.id);
+    const balanceBefore = await getBalance(req.apiKey.id);
+
     if (balanceBefore < EMBEDDING_COST) {
       return res.status(402).json({
         success: false,
@@ -38,7 +45,7 @@ router.post("/embeddings", requireApiKey("embeddings"), requirePlanFeature("embe
     }
 
     const result = await generateEmbedding(input);
-    const balanceAfter = spendCredits(req.apiKey.id, EMBEDDING_COST, "embedding_usage");
+    const balanceAfter = await spendCredits(req.apiKey.id, EMBEDDING_COST, "embedding_usage");
 
     if (balanceAfter === null) {
       return res.status(402).json({
@@ -49,7 +56,7 @@ router.post("/embeddings", requireApiKey("embeddings"), requirePlanFeature("embe
       });
     }
 
-    recordUsage({
+    await recordUsage({
       apiKeyId: req.apiKey.id,
       endpoint: "/v1/embeddings",
       usage: {
