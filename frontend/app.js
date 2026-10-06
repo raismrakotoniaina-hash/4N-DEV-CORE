@@ -86,24 +86,36 @@ async function createDeveloperKey(event) {
   const button = $("#createKeyBtn");
   const error = $("#createKeyError");
   const name = input?.value.trim() || "";
-  if (error) error.classList.add("hidden");
+
+  if (error) {
+    error.textContent = "";
+    error.classList.add("hidden");
+  }
+
   if (!name) {
     if (error) {
       error.textContent = "Developer or company name is required.";
       error.classList.remove("hidden");
     }
     input?.focus();
-    return;
+    return false;
   }
 
   setButton(button, true, "Creating API key…", "Create API key");
+
   try {
     const data = await api("/v1/keys/create", {
       method:"POST",
       body:JSON.stringify({name}),
       timeout:15000
     });
-    if (!data.api_key) throw new Error("The Core API did not return an API key.");
+
+    if (!data.api_key) {
+      const missing = new Error("The Core API did not return an API key.");
+      missing.status = 502;
+      throw missing;
+    }
+
     key = data.api_key;
     sessionStorage.setItem("4ndev_new_api_key", key);
     $("#createdApiKey").value = key;
@@ -112,18 +124,36 @@ async function createDeveloperKey(event) {
     $("#copyStatus").textContent = "Key created successfully.";
     toast("Developer API key created.", "success");
   } catch (error) {
-    const message = error.status === 503
-      ? (error.message + " — Database setup is required before a persistent developer account can be created.")
-      : (error.message || "Unable to create API key.");
-    if (error) console.error("4N DEV onboarding error", error);
-    if ($("#createKeyError")) {
-      $("#createKeyError").textContent = message;
-      $("#createKeyError").classList.remove("hidden");
+    console.error("4N DEV onboarding error", error);
+
+    let message = error.message || "Unable to create API key.";
+
+    if (error.status === 503 && error.data?.code === "DATABASE_NOT_CONFIGURED") {
+      message = "Developer key creation is temporarily unavailable. 4N DEV needs its dedicated PostgreSQL database before it can create a persistent API key.";
+    } else if (error.status === 429) {
+      message = "Too many key-creation attempts. Please wait a few minutes and try again.";
+    } else if (error.status === 404) {
+      message = "The onboarding API route is not available on this deployment. Please redeploy the latest 4N DEV Core version.";
+    } else if (error.status === 401) {
+      message = "This deployment is still serving an older onboarding version. Please redeploy the latest 4N DEV Core version.";
+    } else if (/fetch/i.test(message) || error.name === "TypeError") {
+      message = "The 4N DEV Core API could not be reached. Check the deployment and try again.";
     }
+
+    const errorBox = $("#createKeyError");
+    if (errorBox) {
+      errorBox.textContent = message;
+      errorBox.classList.remove("hidden");
+    }
+    toast(message, "error");
   } finally {
     setButton(button, false, "", "Create API key");
   }
+
+  return false;
 }
+
+window.__4nCreateKey = createDeveloperKey;
 
 async function copyText(value) {
   try {
