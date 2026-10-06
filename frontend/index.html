@@ -18,55 +18,83 @@
   <header class="landing-nav">
     <a class="brand" href="/" id="landingBrand"><span class="brand-logo">4N</span><span><b>4N DEV</b><small>Developer Platform</small></span></a>
     <div class="landing-actions">
-      <span class="secure"><i></i> Core API online</span>
-      <a class="nav-link" id="getStartedBtn" href="#onboardingCard">Get started</a>
+      <span class="secure"><i></i> Core API operational</span>
+      <a class="nav-link" href="#platformAccess">Developer access</a>
     </div>
   </header>
 
   <main class="landing">
     <section class="hero-copy">
       <span class="eyebrow">4N DEV / DEVELOPER PLATFORM</span>
-      <h1>Build the next<br><em>generation.</em></h1>
-      <p>One professional platform for AI APIs, projects, Builder, deployments, usage and billing.</p>
+      <h1>Your AI<br><em>developer workspace.</em></h1>
+      <p>Build, test and ship with one professional workspace for AI models, API keys, projects, Builder, deployments, usage and billing.</p>
+
       <div class="hero-actions">
-        <a id="heroDocs" class="ghost hero-button" href="#onboardingCard">Explore platform</a>
+        <button id="startBuildingBtn" class="primary hero-button" type="button">Start building free <span>→</span></button>
       </div>
-      <div class="hero-points"><span>✦ AI Models</span><span>⌘ Developer API</span><span>◇ App Builder</span><span>↗ Deployments</span></div>
-      <div class="trust-row"><span>REST API</span><span>Bearer auth</span><span>Credit-based</span><span>Mobile ready</span></div>
+
+      <div class="hero-points">
+        <span>✦ AI Models</span><span>⌁ API Keys</span><span>□ Projects</span><span>◇ AI Builder</span><span>↗ Deployments</span>
+      </div>
+
+      <div class="platform-preview">
+        <div class="preview-top"><span><i></i> 4N DEV Core</span><b>Production</b></div>
+        <div class="preview-grid">
+          <div><small>WORKSPACE</small><strong>Developer</strong><span>API v1</span></div>
+          <div><small>MODELS</small><strong>4 capabilities</strong><span>Chat · Code · Image · Embeddings</span></div>
+          <div><small>OPERATE</small><strong>Usage & Billing</strong><span>Credits, plans & activity</span></div>
+        </div>
+      </div>
     </section>
 
-    <section id="onboardingCard" class="onboarding-card">
-      <div class="card-top"><span class="step">01 / DEVELOPER ACCESS</span><span class="lock">⌑ Secure onboarding</span></div>
+    <section id="platformAccess" class="onboarding-card">
+      <div id="platformOverview">
+        <div class="card-top"><span class="step">DEVELOPER PLATFORM</span><span class="lock">Secure workspace access</span></div>
+        <div class="card-icon">✦</div>
+        <span class="eyebrow">ONE WORKSPACE</span>
+        <h2>Everything you need to build with 4N DEV</h2>
+        <p class="sub">Create your free developer workspace, receive your 4N DEV API key, then manage your models, projects, usage and billing from one console.</p>
 
-      <div id="createKeyForm">
-        <div id="createKeyStep">
-          <div class="card-icon">⌁</div>
-          <h2>Create your developer account</h2>
-          <p class="sub">Start with a free developer key. 4N DEV generates the secret for you — you do not need an existing API key.</p>
-          <label for="developerName">Developer or company name</label>
-          <input id="developerName" class="field large-field" maxlength="80" autocomplete="name" placeholder="e.g. Ismael or 4N Dev" required>
-          <button id="createKeyBtn" class="primary full" type="button"><span>Create API key</span><b>→</b></button>
-          <div id="createKeyError" class="error hidden" role="alert"></div>
-          <p class="fine">The secret is displayed once after creation. Store it securely and never publish it in a repository or browser-side production application.</p>
+        <div class="access-list">
+          <div><b>01</b><span><strong>Developer API</strong><small>Secure Bearer authentication with your own API key.</small></span></div>
+          <div><b>02</b><span><strong>AI services</strong><small>Chat, coding, image generation and embeddings.</small></span></div>
+          <div><b>03</b><span><strong>Build & deploy</strong><small>Projects, AI Builder and deployment workflows.</small></span></div>
+          <div><b>04</b><span><strong>Usage & billing</strong><small>Credits, plans, activity and account controls.</small></span></div>
         </div>
+
+        <button id="startAccessBtn" class="primary full" type="button">Create free developer workspace <span>→</span></button>
+        <p class="fine">No existing API key is required. 4N DEV creates your developer credential during onboarding.</p>
+      </div>
+
+      <div id="createKeyStep" class="hidden">
+        <div class="card-top"><span class="step">01 / DEVELOPER ACCESS</span><span class="lock">Secure onboarding</span></div>
+        <div class="card-icon">⌁</div>
+        <h2>Create your developer workspace</h2>
+        <p class="sub">Choose the developer or company name for your 4N DEV workspace. Your free API key will be generated automatically.</p>
+        <label for="developerName">Developer or company name</label>
+        <input id="developerName" class="field large-field" maxlength="80" autocomplete="name" placeholder="e.g. Ismael or 4N Dev" required>
+        <button id="createKeyBtn" class="primary full" type="button"><span>Create API key</span><b>→</b></button>
+        <div id="createKeyError" class="error hidden" role="alert"></div>
+        <button id="backToPlatformBtn" class="ghost full" type="button">Back to platform overview</button>
+        <p class="fine">Your secret is displayed once after creation. Store it securely and never publish it in a repository or browser-side production application.</p>
+      </div>
 
       <div id="keyCreatedStep" class="hidden">
         <div class="success-mark">✓</div>
-        <span class="eyebrow">KEY CREATED</span>
-        <h2>Your API key is ready</h2>
-        <p class="sub">Copy your secret now. The full value is only shown during onboarding.</p>
+        <span class="eyebrow">WORKSPACE CREATED</span>
+        <h2>Your developer access is ready</h2>
+        <p class="sub">Copy your API key now. The full secret is only shown during this onboarding step.</p>
         <div class="secret-box"><input id="createdApiKey" readonly spellcheck="false"><button id="copyCreatedKey" type="button">Copy</button></div>
         <div class="warning"><b>Protect your secret.</b> Use an environment variable such as <code>FOURN_DEV_API_KEY</code> in your server application.</div>
         <button id="continueConsoleBtn" class="primary full" type="button">Open Developer Console <span>→</span></button>
         <div id="copyStatus" class="status"></div>
       </div>
-
-      <div class="onboarding-foot"><span>Free developer access</span><span>•</span><span>Chat · Coding · Image · Embeddings</span></div>
     </section>
   </main>
 
-  <footer class="landing-footer"><span>© 4N DEV</span><span>Developer API · Models · Projects · Builder · Deployments · Billing</span><span>API v1</span></footer>
+  <footer class="landing-footer"><span>© 4N DEV</span><span>AI APIs · Models · Projects · Builder · Deployments · Billing</span><span>API v1</span></footer>
 </section>
+
 
 <section id="consoleScreen" class="hidden">
 <header class="topbar">
