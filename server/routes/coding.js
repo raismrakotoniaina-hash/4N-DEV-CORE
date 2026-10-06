@@ -13,32 +13,74 @@ const CODING_LIMITS = getServiceLimit("coding");
 router.post("/coding", requireApiKey("coding"), requirePlanFeature("coding"), async (req, res) => {
   try {
     const { input } = req.body || {};
+
     if (typeof input !== "string" && !Array.isArray(input)) {
-      return res.status(400).json({ success: false, error: "input must be a string or an array" });
+      return res.status(400).json({
+        success: false,
+        error: "input must be a string or an array"
+      });
     }
 
-    const inputLength = typeof input === "string" ? input.length : JSON.stringify(input).length;
+    const inputLength = typeof input === "string"
+      ? input.length
+      : JSON.stringify(input).length;
+
     if (inputLength > CODING_LIMITS.maxInputCharacters) {
-      return res.status(413).json({ success: false, error: "Coding input is too large", max_characters: CODING_LIMITS.maxInputCharacters });
+      return res.status(413).json({
+        success: false,
+        error: "Coding input is too large",
+        max_characters: CODING_LIMITS.maxInputCharacters
+      });
     }
 
-    const balanceBefore = getBalance(req.apiKey.id);
+    const balanceBefore = await getBalance(req.apiKey.id);
+
     if (balanceBefore < CODING_COST) {
-      return res.status(402).json({ success: false, error: "Insufficient 4N DEV credits", credits: balanceBefore, credits_required: CODING_COST });
+      return res.status(402).json({
+        success: false,
+        error: "Insufficient 4N DEV credits",
+        credits: balanceBefore,
+        credits_required: CODING_COST
+      });
     }
 
     const result = await generateCodingResponse(input);
-    const balanceAfter = spendCredits(req.apiKey.id, CODING_COST, "coding_usage");
+    const balanceAfter = await spendCredits(req.apiKey.id, CODING_COST, "coding_usage");
+
     if (balanceAfter === null) {
-      return res.status(402).json({ success: false, error: "Insufficient 4N DEV credits", credits: balanceBefore, credits_required: CODING_COST });
+      return res.status(402).json({
+        success: false,
+        error: "Insufficient 4N DEV credits",
+        credits: balanceBefore,
+        credits_required: CODING_COST
+      });
     }
 
-    recordUsage({ apiKeyId: req.apiKey.id, endpoint: "/v1/coding", usage: { ...result.usage, credits_used: CODING_COST, credits_remaining: balanceAfter } });
+    await recordUsage({
+      apiKeyId: req.apiKey.id,
+      endpoint: "/v1/coding",
+      usage: {
+        ...result.usage,
+        credits_used: CODING_COST,
+        credits_remaining: balanceAfter
+      }
+    });
 
-    res.json({ success: true, id: result.id, model: result.model, output: result.text, usage: result.usage, credits_used: CODING_COST, credits_remaining: balanceAfter });
+    res.json({
+      success: true,
+      id: result.id,
+      model: result.model,
+      output: result.text,
+      usage: result.usage,
+      credits_used: CODING_COST,
+      credits_remaining: balanceAfter
+    });
   } catch (error) {
     console.error("4N DEV Coding Gateway error:", error.message);
-    res.status(error.statusCode || 500).json({ success: false, error: error.message || "Coding AI error" });
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || "Coding AI error"
+    });
   }
 });
 
