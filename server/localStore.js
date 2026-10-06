@@ -10,7 +10,11 @@ const DEFAULT_STATE = {
   creditTransactions: [],
   projects: [],
   projectFiles: [],
-  usageRecords: []
+  usageRecords: [],
+  builds: [],
+  deployments: [],
+  billingOrders: [],
+  billingPayments: []
 };
 
 let statePromise = null;
@@ -32,7 +36,11 @@ async function loadState() {
       creditTransactions: Array.isArray(parsed.creditTransactions) ? parsed.creditTransactions : [],
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
       projectFiles: Array.isArray(parsed.projectFiles) ? parsed.projectFiles : [],
-      usageRecords: Array.isArray(parsed.usageRecords) ? parsed.usageRecords : []
+      usageRecords: Array.isArray(parsed.usageRecords) ? parsed.usageRecords : [],
+      builds: Array.isArray(parsed.builds) ? parsed.builds : [],
+      deployments: Array.isArray(parsed.deployments) ? parsed.deployments : [],
+      billingOrders: Array.isArray(parsed.billingOrders) ? parsed.billingOrders : [],
+      billingPayments: Array.isArray(parsed.billingPayments) ? parsed.billingPayments : []
     };
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
@@ -41,9 +49,7 @@ async function loadState() {
 }
 
 async function getState() {
-  if (!statePromise) {
-    statePromise = loadState();
-  }
+  if (!statePromise) statePromise = loadState();
   return statePromise;
 }
 
