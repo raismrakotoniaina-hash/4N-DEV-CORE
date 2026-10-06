@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/frontend/styles.css?v=20261006-10">
+<link rel="stylesheet" href="/frontend/styles.css?v=20261006-11">
 </head>
 <body>
 <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div><div class="noise"></div>
@@ -46,7 +46,7 @@
           <p class="sub">Start with a free developer key. 4N DEV generates the secret for you — you do not need an existing API key.</p>
           <label for="developerName">Developer or company name</label>
           <input id="developerName" class="field large-field" maxlength="80" autocomplete="name" placeholder="e.g. Ismael or 4N Dev" required>
-          <button id="createKeyBtn" class="primary full" type="submit"><span>Create API key</span><b>→</b></button>
+          <button id="createKeyBtn" class="primary full" type="submit" onclick="return window.__4nCreateKey(event)"><span>Create API key</span><b>→</b></button>
           <div id="createKeyError" class="error hidden" role="alert"></div>
           <p class="fine">The secret is displayed once after creation. Store it securely and never publish it in a repository or browser-side production application.</p>
         </div>
@@ -99,6 +99,6 @@
 </div>
 </section>
 
-<script src="/frontend/app.js?v=20261006-10" defer></script>
+<script src="/frontend/app.js?v=20261006-11" defer></script>
 </body>
 </html>
