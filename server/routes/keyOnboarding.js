@@ -1,7 +1,6 @@
 import { createApiKey } from "../apiKeys.js";
 import { addCredits } from "../credits.js";
 import { getPlan } from "../plans.js";
-import { isDatabaseConfigured } from "../db.js";
 
 const buckets = new Map();
 const WINDOW_MS = 15 * 60 * 1000;
@@ -35,14 +34,6 @@ function onboardingLimit(req, res, next) {
 export function registerKeyOnboarding(app) {
   app.post("/v1/keys/create", onboardingLimit, async (req, res, next) => {
     try {
-      if (!isDatabaseConfigured()) {
-        return res.status(503).json({
-          success: false,
-          error: "API key creation is temporarily unavailable",
-          code: "DATABASE_NOT_CONFIGURED"
-        });
-      }
-
       const rawName = req.body?.name;
       const name = typeof rawName === "string" ? rawName.trim() : "";
 
