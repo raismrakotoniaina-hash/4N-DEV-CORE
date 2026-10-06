@@ -154,6 +154,8 @@ async function createDeveloperKey(event) {
 }
 
 
+window.__4nCreateKeyNow = createDeveloperKey;
+
 async function copyText(value) {
   try {
     await navigator.clipboard.writeText(value);
