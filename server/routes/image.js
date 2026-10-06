@@ -14,37 +14,66 @@ router.post("/image", requireApiKey("image"), requirePlanFeature("image"), async
     const { prompt, quality = "medium" } = req.body || {};
 
     if (typeof prompt !== "string" || !prompt.trim()) {
-      return res.status(400).json({ success: false, error: "prompt must be a non-empty string" });
+      return res.status(400).json({
+        success: false,
+        error: "prompt must be a non-empty string"
+      });
     }
 
     if (!ALLOWED_QUALITY.includes(quality)) {
-      return res.status(400).json({ success: false, error: "quality must be low, medium, or high" });
+      return res.status(400).json({
+        success: false,
+        error: "quality must be low, medium, or high"
+      });
     }
 
     const cost = getServicePrice("image", quality);
-    const balanceBefore = getBalance(req.apiKey.id);
+    const balanceBefore = await getBalance(req.apiKey.id);
 
     if (balanceBefore < cost) {
-      return res.status(402).json({ success: false, error: "Insufficient 4N DEV credits", credits: balanceBefore, credits_required: cost });
+      return res.status(402).json({
+        success: false,
+        error: "Insufficient 4N DEV credits",
+        credits: balanceBefore,
+        credits_required: cost
+      });
     }
 
     const result = await generateImage(prompt, quality);
-    const balanceAfter = spendCredits(req.apiKey.id, cost, "image_usage");
+    const balanceAfter = await spendCredits(req.apiKey.id, cost, "image_usage");
 
     if (balanceAfter === null) {
-      return res.status(402).json({ success: false, error: "Insufficient 4N DEV credits", credits: balanceBefore, credits_required: cost });
+      return res.status(402).json({
+        success: false,
+        error: "Insufficient 4N DEV credits",
+        credits: balanceBefore,
+        credits_required: cost
+      });
     }
 
-    recordUsage({
+    await recordUsage({
       apiKeyId: req.apiKey.id,
       endpoint: "/v1/image",
-      usage: { credits_used: cost, credits_remaining: balanceAfter, quality }
+      usage: {
+        credits_used: cost,
+        credits_remaining: balanceAfter,
+        quality
+      }
     });
 
-    res.json({ success: true, model: result.model, image: result.image, credits_used: cost, credits_remaining: balanceAfter });
+    res.json({
+      success: true,
+      model: result.model,
+      image: result.image,
+      credits_used: cost,
+      credits_remaining: balanceAfter
+    });
   } catch (error) {
     console.error("4N DEV Image Gateway error:", error.message);
-    res.status(error.statusCode || 500).json({ success: false, error: error.message || "Image generation error" });
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || "Image generation error"
+    });
   }
 });
 
