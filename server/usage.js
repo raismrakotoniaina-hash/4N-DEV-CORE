@@ -1,20 +1,40 @@
 import crypto from "node:crypto";
 import { query, isDatabaseConfigured } from "./db.js";
+import { readStore, updateStore } from "./localStore.js";
 
 export async function recordUsage({ apiKeyId, endpoint, usage }) {
+  const record = {
+    id: crypto.randomUUID(),
+    apiKeyId,
+    endpoint,
+    usage: usage ?? {},
+    createdAt: new Date().toISOString()
+  };
+
   if (!isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL is required for usage storage");
+    await updateStore((state) => ({
+      ...state,
+      usageRecords: [...state.usageRecords, record]
+    }));
+    return record;
   }
 
   await query(
     `INSERT INTO usage_records (id, api_key_id, endpoint, usage, created_at)
      VALUES ($1, $2, $3, $4::jsonb, $5)`,
-    [crypto.randomUUID(), apiKeyId, endpoint, JSON.stringify(usage ?? {}), new Date()]
+    [record.id, apiKeyId, endpoint, JSON.stringify(record.usage), new Date(record.createdAt)]
   );
+
+  return record;
 }
 
 export async function getUsage(apiKeyId) {
-  if (!isDatabaseConfigured()) return [];
+  if (!isDatabaseConfigured()) {
+    const state = await readStore();
+    return state.usageRecords
+      .filter((record) => record.apiKeyId === apiKeyId)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  }
 
   const result = await query(
     `SELECT id, api_key_id, endpoint, usage, created_at
