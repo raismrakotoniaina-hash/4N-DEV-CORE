@@ -4,6 +4,8 @@ import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { isDatabaseConfigured, query } from "./db.js";
+import { readStore, updateStore } from "./localStore.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_FILES = 100;
@@ -36,17 +38,18 @@ function validateFiles(files) {
   }
   return { validFiles, totalCharacters };
 }
+
 function readPackageJson(files) {
   const packageFile = files.find(file => file.path === "package.json");
   if (!packageFile) return null;
-  try {
-    return JSON.parse(packageFile.content);
-  } catch {
+  try { return JSON.parse(packageFile.content); }
+  catch {
     const error = new Error("Invalid package.json");
     error.statusCode = 400;
     throw error;
   }
 }
+
 function validateViteProject(packageJson) {
   if (packageJson?.scripts?.build !== "vite build") {
     const error = new Error("Vite projects must use the exact build script: vite build");
@@ -62,6 +65,7 @@ function validateViteProject(packageJson) {
     }
   }
 }
+
 async function runViteBuild(files) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "4ndev-build-"));
   const projectRoot = path.join(tempRoot, "project");
@@ -97,12 +101,8 @@ async function runViteBuild(files) {
           error.statusCode = 413;
           throw error;
         }
-        const isText = !/\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf)$/i.test(relative);
-        outputFiles.push({
-          path: relative,
-          content: isText ? content.toString("utf8") : content.toString("base64"),
-          encoding: isText ? "utf8" : "base64"
-        });
+        const isText = !/.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf)$/i.test(relative);
+        outputFiles.push({path: relative, content: isText ? content.toString("utf8") : content.toString("base64"), encoding: isText ? "utf8" : "base64"});
         totalCharacters += content.length;
       }
     }
@@ -117,6 +117,27 @@ async function runViteBuild(files) {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 }
+
+function mapBuildRow(row) {
+  return {
+    id: row.id, apiKeyId: row.api_key_id, projectId: row.project_id,
+    projectName: row.project_name, type: row.type, status: row.status,
+    entrypoint: row.entrypoint, files: row.files, fileCount: row.file_count,
+    totalCharacters: row.total_characters,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at
+  };
+}
+
+function mapLocalBuild(build) {
+  return {
+    id: build.id, apiKeyId: build.apiKeyId, projectId: build.projectId,
+    projectName: build.projectName, type: build.type, status: build.status,
+    entrypoint: build.entrypoint, files: build.files, fileCount: build.fileCount,
+    totalCharacters: build.totalCharacters, createdAt: build.createdAt, updatedAt: build.updatedAt
+  };
+}
+
 export async function buildProject(apiKeyId, project, files) {
   const { validFiles, totalCharacters } = validateFiles(files);
   const packageJson = readPackageJson(validFiles);
@@ -132,79 +153,59 @@ export async function buildProject(apiKeyId, project, files) {
 
   const now = new Date();
   const id = crypto.randomUUID();
-  const { query, isDatabaseConfigured } = await import("./db.js");
+  const build = {
+    id, apiKeyId, projectId: project.id, projectName: project.name,
+    ...result, createdAt: now.toISOString(), updatedAt: now.toISOString()
+  };
 
-  if (!isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL is required for build storage");
+  if (isDatabaseConfigured()) {
+    await query(
+      `INSERT INTO builds
+        (id, api_key_id, project_id, project_name, type, status, entrypoint, files, file_count, total_characters, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $11)`,
+      [id, apiKeyId, project.id, project.name, result.type, result.status, result.entrypoint,
+       JSON.stringify(result.files), result.fileCount, result.totalCharacters, now]
+    );
+  } else {
+    await updateStore(state => ({
+      ...state,
+      builds: [...state.builds, build]
+    }));
   }
 
-  await query(
-    `INSERT INTO builds
-      (id, api_key_id, project_id, project_name, type, status, entrypoint, files, file_count, total_characters, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $11)`,
-    [
-      id, apiKeyId, project.id, project.name, result.type, result.status,
-      result.entrypoint, JSON.stringify(result.files), result.fileCount,
-      result.totalCharacters, now
-    ]
-  );
-
-  return {
-    id,
-    apiKeyId,
-    projectId: project.id,
-    projectName: project.name,
-    ...result,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString()
-  };
+  return build;
 }
 
 export async function getBuild(apiKeyId, buildId) {
-  if (!(await import("./db.js")).isDatabaseConfigured()) return null;
-  const { query } = await import("./db.js");
-  const result = await query(
-    `SELECT id, api_key_id, project_id, project_name, type, status, entrypoint,
-            files, file_count, total_characters, created_at, updated_at
-     FROM builds
-     WHERE id = $1 AND api_key_id = $2
-     LIMIT 1`,
-    [buildId, apiKeyId]
-  );
-  return result.rows[0] ? mapBuildRow(result.rows[0]) : null;
+  if (isDatabaseConfigured()) {
+    const result = await query(
+      `SELECT id, api_key_id, project_id, project_name, type, status, entrypoint,
+              files, file_count, total_characters, created_at, updated_at
+       FROM builds WHERE id = $1 AND api_key_id = $2 LIMIT 1`,
+      [buildId, apiKeyId]
+    );
+    return result.rows[0] ? mapBuildRow(result.rows[0]) : null;
+  }
+  const state = await readStore();
+  const build = state.builds.find(item => item.id === buildId && item.apiKeyId === apiKeyId);
+  return build ? mapLocalBuild(build) : null;
 }
 
 export async function listBuilds(apiKeyId, projectId = null) {
-  const { query, isDatabaseConfigured } = await import("./db.js");
-  if (!isDatabaseConfigured()) return [];
-
-  const params = [apiKeyId];
-  let sql = `SELECT id, api_key_id, project_id, project_name, type, status, entrypoint,
-                     files, file_count, total_characters, created_at, updated_at
-              FROM builds WHERE api_key_id = $1`;
-  if (projectId) {
-    params.push(projectId);
-    sql += " AND project_id = $2";
+  if (isDatabaseConfigured()) {
+    const params = [apiKeyId];
+    let sql = `SELECT id, api_key_id, project_id, project_name, type, status, entrypoint,
+                       files, file_count, total_characters, created_at, updated_at
+                FROM builds WHERE api_key_id = $1`;
+    if (projectId) { params.push(projectId); sql += " AND project_id = $2"; }
+    sql += " ORDER BY created_at DESC";
+    const result = await query(sql, params);
+    return result.rows.map(mapBuildRow).map(({ files, ...build }) => build);
   }
-  sql += " ORDER BY created_at DESC";
-
-  const result = await query(sql, params);
-  return result.rows.map(mapBuildRow).map(({ files, ...build }) => build);
-}
-
-function mapBuildRow(row) {
-  return {
-    id: row.id,
-    apiKeyId: row.api_key_id,
-    projectId: row.project_id,
-    projectName: row.project_name,
-    type: row.type,
-    status: row.status,
-    entrypoint: row.entrypoint,
-    files: row.files,
-    fileCount: row.file_count,
-    totalCharacters: row.total_characters,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at
-  };
+  const state = await readStore();
+  return state.builds
+    .filter(item => item.apiKeyId === apiKeyId && (!projectId || item.projectId === projectId))
+    .sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .map(mapLocalBuild)
+    .map(({ files, ...build }) => build);
 }
