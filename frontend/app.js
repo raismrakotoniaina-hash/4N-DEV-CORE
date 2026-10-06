@@ -182,7 +182,7 @@ async function copyCreatedKey() {
 }
 
 function continueToConsole() {
-  if (!key) key = sessionStorage.getItem("4ndev_new_api_key") || "";
+  if (!key) key = window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";
   if (!key) return toast("No API key is available yet.", "error");
   localStorage.setItem("4ndev_api_key", key);
   sessionStorage.removeItem("4ndev_new_api_key");
