@@ -5,8 +5,26 @@
     const button = document.getElementById("createKeyBtn");
     const input = document.getElementById("developerName");
     const error = document.getElementById("createKeyError");
+    const overview = document.getElementById("platformOverview");
+    const createStep = document.getElementById("createKeyStep");
+    const backButton = document.getElementById("backToPlatformBtn");
+    const startButtons = [document.getElementById("startBuildingBtn"), document.getElementById("startAccessBtn")].filter(Boolean);
 
     if (!button || !input) return;
+
+    startButtons.forEach((startButton) => {
+      startButton.addEventListener("click", function () {
+        overview?.classList.add("hidden");
+        createStep?.classList.remove("hidden");
+        input.focus();
+        document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth", block:"center"});
+      });
+    });
+
+    backButton?.addEventListener("click", function () {
+      createStep?.classList.add("hidden");
+      overview?.classList.remove("hidden");
+    });
 
     async function createKey() {
       const name = (input.value || "").trim();
