@@ -15,59 +15,45 @@
 .access-list{display:grid;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:20px 0 14px}.access-list>div{display:flex;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line);background:#0b101d}.access-list>div:last-child{border-bottom:0}.access-list>b,.access-list>div>b{flex:0 0 20px;color:var(--purple2);font-size:8px;padding-top:2px}.access-list span{display:grid;gap:3px}.access-list strong{font-size:9px}.access-list small{font-size:8px;color:#68758c;line-height:1.4}
 @media(max-width:800px){.platform-preview{margin-top:22px}.preview-grid{grid-template-columns:1fr}.preview-grid>div{border-right:0;border-bottom:1px solid var(--line)}.preview-grid>div:last-child{border-bottom:0}.onboarding-card{padding:23px}.access-list{margin-top:16px}}
 
-
-/* Mobile onboarding layout fixes */
+/* Consolidated mobile onboarding layout */
 @media(max-width:800px){
-  .landing-nav{min-height:64px;height:auto;padding:10px 16px;gap:10px}
-  .landing-actions{gap:8px;min-width:0}
-  .landing-actions .nav-link{display:none}
-  .landing-actions .top-console-btn{padding:8px 10px;font-size:9px;white-space:nowrap}
-  .hero-copy h1{line-height:1.04;letter-spacing:-2px}
-  .hero-copy>p{line-height:1.75}
-  .onboarding-card{width:100%;overflow:hidden}
-  .onboarding-card h2,.onboarding-card .sub,.fine{overflow-wrap:anywhere}
-}
-@media(max-width:500px){
-  .landing-nav{padding:9px 12px}
-  .landing-nav .brand{flex:0 0 auto}
-  .landing-actions .top-console-btn{font-size:8px;padding:8px 9px}
-  .hero-copy h1{font-size:39px;line-height:1.06}
-  .onboarding-card{padding:20px}
-  .card-top{gap:8px;align-items:flex-start}
-  .lock{white-space:nowrap}
-}
-
-/* Final mobile overlap protection */
-@media(max-width:800px){
-  .landing-nav{height:auto;min-height:64px;padding:10px 14px;align-items:center}
-  .landing-actions{flex:1;justify-content:flex-end;min-width:0}
+  .landing-nav{min-height:64px;height:auto;padding:10px 14px;gap:10px;align-items:center}
+  .landing-actions{flex:1;display:flex;justify-content:flex-end;gap:8px;min-width:0}
   .landing-actions .secure,.landing-actions .nav-link{display:none}
-  .landing-actions .top-console-btn{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .landing{width:calc(100% - 24px);padding:30px 0 45px;display:block}
-  .hero-copy{width:100%;margin-bottom:24px}
+  .landing-actions .top-console-btn{max-width:190px;padding:8px 10px;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .landing{width:calc(100% - 24px);display:block;padding:30px 0 45px}
+  .hero-copy{width:100%;text-align:center;margin-bottom:24px}
   .hero-copy h1{font-size:clamp(38px,11vw,52px);line-height:1.08;letter-spacing:-2px;word-break:normal}
   .hero-copy>p{font-size:12px;line-height:1.75;margin-left:auto;margin-right:auto}
+  .hero-actions,.hero-points,.trust-row{justify-content:center}
   .hero-points{gap:6px}
   .hero-points span{font-size:8px;padding:6px 8px}
-  .onboarding-card{width:100%;max-width:100%;padding:20px 18px;border-radius:16px}
-  .onboarding-card h2{font-size:21px;line-height:1.25;overflow-wrap:anywhere;word-break:normal}
-  .sub{font-size:11px;line-height:1.75;overflow-wrap:anywhere}
+  .onboarding-card{width:100%;max-width:100%;padding:20px 18px;border-radius:16px;overflow:hidden}
+  .onboarding-card h2{font-size:21px;line-height:1.25;overflow-wrap:anywhere}
+  .onboarding-card .sub,.fine{font-size:11px;line-height:1.75;overflow-wrap:anywhere}
   .card-top{display:grid;grid-template-columns:1fr;gap:7px;align-items:start}
   .lock{font-size:8px;white-space:normal}
   .access-list>div{align-items:flex-start}
   .access-list span{min-width:0}
   .access-list strong,.access-list small{overflow-wrap:anywhere}
-  .fine{overflow-wrap:anywhere}
   .secret-box{min-width:0}
   .secret-box input{min-width:0;width:1px;flex:1}
+  .platform-preview{margin-top:22px}
+  .preview-grid{grid-template-columns:1fr}
+  .preview-grid>div{border-right:0;border-bottom:1px solid var(--line)}
+  .preview-grid>div:last-child{border-bottom:0}
 }
-@media(max-width:430px){
-  .landing-nav .brand{gap:7px}
+@media(max-width:500px){
+  .landing-nav{padding:9px 12px}
+  .landing-nav .brand{flex:0 0 auto;gap:7px}
   .landing-nav .brand-logo{width:32px;height:32px}
   .landing-nav .brand b{font-size:11px}
   .landing-nav .brand small{font-size:8px}
-  .landing-actions .top-console-btn{font-size:8px;padding:8px 8px;max-width:155px}
+  .landing-actions .top-console-btn{font-size:8px;padding:8px;max-width:155px}
   .hero-copy h1{font-size:38px;letter-spacing:-1.5px}
+  .hero-copy>p{font-size:11px}
   .onboarding-card{padding:18px 15px}
   .access-list>div{padding:10px}
+  .hero-actions{flex-direction:column}
+  .hero-actions button{width:100%}
 }
