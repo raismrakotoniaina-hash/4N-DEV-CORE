@@ -1,170 +1,20 @@
-"use strict";
-(() => {
-  const S = { key: localStorage.getItem("4ndev_api_key") || "", page: "dashboard" };
-  const $ = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-
-  const pages = {
-    dashboard: ["Dashboard","Your 4N DEV workspace at a glance.","Connect, build, deploy and operate from one professional console."],
-    playground: ["Playground","Test AI capabilities.","Run prompts and inspect responses in a dedicated workspace."],
-    models: ["AI Models","Explore available AI capabilities.","Chat, coding, image generation and embeddings."],
-    apiKeys: ["API Keys","Manage developer credentials.","Create, protect and rotate API access keys."],
-    projects: ["Projects","Organize applications and files.","Create projects, manage source files and prepare deployments."],
-    builder: ["AI Builder","Build applications with AI.","Describe an application, generate a plan and prepare a build."],
-    deployments: ["Deployments","Publish and manage applications.","Track deployment state, URLs and release history."],
-    usage: ["Usage","Understand API activity.","Monitor requests, credits and consumption over time."],
-    credits: ["Credits","Manage your AI capacity.","Review your balance and the credit cost of each capability."],
-    billing: ["Billing","Manage payments and account billing.","Orders, payment status and billing history."],
-    plans: ["Plans","Choose the right capacity.","Compare plans and continue to checkout when ready."],
-    docs: ["Documentation","Learn how to use 4N DEV.","Authentication, quickstarts, projects, Builder and operations."],
-    apiReference: ["API Reference","Explore the Core API v1.","Endpoints, methods, authentication and examples."],
-    support: ["Support","Get help when you need it.","Documentation, diagnostics and developer support."],
-    status: ["System Status","Monitor platform health.","Core API availability and service status."],
-    settings: ["Settings & Security","Control your workspace.","Account, security and local credential settings."]
-  };
-
-  function openConsole() {
-    S.key = localStorage.getItem("4ndev_api_key") || "";
-    if (!S.key) return false;
-    $("#onboardingScreen")?.classList.add("hidden");
-    $("#consoleScreen")?.classList.remove("hidden");
-    navigate(S.page);
-    return true;
-  }
-
-  function showOnboarding() {
-    $("#consoleScreen")?.classList.add("hidden");
-    $("#onboardingScreen")?.classList.remove("hidden");
-  }
-
-  function render(page) {
-    const p = pages[page] || pages.dashboard;
-    const isDashboard = page === "dashboard";
-    $("#main").innerHTML = `
-      <header class="page-head">
-        <div>
-          <span class="eyebrow">4N DEV / DEVELOPER CONSOLE</span>
-          <h1>${esc(p[0])}</h1>
-          <p class="muted">${esc(p[1])}</p>
-        </div>
-        <div class="actions">
-          <span class="badge green">CORE ONLINE</span>
-        </div>
-      </header>
-      ${isDashboard ? dashboard() : section(page, p[2])}
-    `;
-  }
-
-  function dashboard() {
-    return `
-      <section class="hero-grid">
-        <article class="card hero">
-          <span class="eyebrow">DEVELOPER PLATFORM</span>
-          <h2>Build with AI. Ship with 4N DEV.</h2>
-          <p class="muted">Your complete workspace for models, APIs, projects, AI Builder, deployments, usage and billing.</p>
-          <div class="actions">
-            <button class="primary" data-page="playground">Open Playground</button>
-            <button class="ghost" data-page="docs">Read Documentation</button>
-          </div>
-        </article>
-        <article class="card">
-          <div class="card-head"><b>Workspace</b><span class="badge green">READY</span></div>
-          <h3>Developer Console</h3>
-          <p class="muted">Secure Bearer authentication · API v1</p>
-          <code class="endpoint">/v1</code>
-          <div class="live"><i></i> Interface ready</div>
-        </article>
-      </section>
-      <div class="stats">
-        <div class="stat"><span>AI Models</span><b>4</b><small>Core capabilities</small><i>✦</i></div>
-        <div class="stat"><span>Workspace</span><b>READY</b><small>Developer access</small><i>◇</i></div>
-        <div class="stat"><span>API</span><b>v1</b><small>Stable surface</small><i>⌁</i></div>
-        <div class="stat"><span>Security</span><b>ON</b><small>Bearer auth</small><i>✓</i></div>
-      </div>
-      <section class="card section">
-        <div class="card-head"><h3>Developer workflow</h3><span class="muted">Start anywhere</span></div>
-        <div class="workflow">
-          <button data-page="apiKeys"><b>01</b><strong>API Keys</strong><span>Manage secure credentials.</span></button>
-          <button data-page="playground"><b>02</b><strong>Playground</strong><span>Test AI requests.</span></button>
-          <button data-page="projects"><b>03</b><strong>Projects</strong><span>Organize applications.</span></button>
-          <button data-page="deployments"><b>04</b><strong>Deployments</strong><span>Publish and operate.</span></button>
-        </div>
-      </section>
-    `;
-  }
-
-  function section(page, description) {
-    const actions = {
-      playground: ["Open Playground workspace","Run AI requests without leaving the console."],
-      models: ["Model catalog","Compare capabilities before integrating them."],
-      apiKeys: ["Credential management","Your API key area will be connected to the existing Core API in Step 2."],
-      projects: ["Project workspace","Project creation, files and deletion will be connected in Step 2."],
-      builder: ["AI Builder workspace","Planner and Builder actions will be connected in Step 2."],
-      deployments: ["Deployment center","Deployment loading and actions will be connected in Step 2."],
-      usage: ["Usage center","Usage loading and credit analytics will be connected in Step 2."],
-      credits: ["Credit center","Credit balance and policy will be connected in Step 2."],
-      billing: ["Billing center","Orders and payment status will be connected in Step 2."],
-      plans: ["Plan catalog","PAPI checkout will be connected in Step 2."],
-      docs: ["Developer documentation","Guides and quickstarts will be expanded in Step 2."],
-      apiReference: ["API reference","The complete endpoint reference will be connected in Step 2."],
-      support: ["Developer support","Diagnostics and support resources will be connected in Step 2."],
-      status: ["System status","Live health checks will be connected in Step 2."],
-      settings: ["Settings & security","Account and credential controls will be connected in Step 2."]
-    };
-    const [title,text] = actions[page] || [pages[page][0],description];
-    return `
-      <section class="card empty-state">
-        <div class="icon">✦</div>
-        <span class="eyebrow">STEP 1 · INTERFACE</span>
-        <h2>${esc(title)}</h2>
-        <p class="muted">${esc(text)}</p>
-        <div class="interface-ready"><i></i><b>Interface ready</b><span>Navigation is active. Backend actions are intentionally not called in Step 1.</span></div>
-      </section>
-    `;
-  }
-
-  function navigate(page) {
-    S.page = pages[page] ? page : "dashboard";
-    $$(".nav").forEach(n => n.classList.toggle("active", n.dataset.page === S.page));
-    render(S.page);
-    $("#sidebar")?.classList.remove("open");
-    window.scrollTo(0,0);
-  }
-
-  document.addEventListener("click", event => {
-    const pageButton = event.target.closest("[data-page]");
-    if (pageButton) {
-      event.preventDefault();
-      navigate(pageButton.dataset.page);
-      return;
-    }
-    if (event.target.closest("#mobileNav")) {
-      $("#sidebar")?.classList.toggle("open");
-      return;
-    }
-    if (event.target.closest("#brandHome")) {
-      event.preventDefault();
-      navigate("dashboard");
-      return;
-    }
-    if (event.target.closest("#logoutBtn")) {
-      localStorage.removeItem("4ndev_api_key");
-      S.key = "";
-      showOnboarding();
-    }
-  });
-
-  window.__4nOpenConsole = openConsole;
-  window.addEventListener("4n:open-console", openConsole);
-
-  function init() {
-    if (!S.key) {
-      showOnboarding();
-      return;
-    }
-    openConsole();
-  }
-
-  init();
-})();
+'use strict';
+(function(){
+var app=document.getElementById('app'),key=localStorage.getItem('4ndev_api_key')||'',page='dashboard',me=null;
+var P={dashboard:['Dashboard','Your 4N DEV Core workspace.'],services:['AI Services','Core capabilities available to independent 4N applications.'],keys:['API Keys','Manage your 4ndev_sk credentials.'],projects:['Projects','Applications, files and project workspace.'],builder:['AI Builder','AI planning and application building.'],deployments:['Deployments','Hosting and published application state.'],usage:['Usage','Requests, credits and consumption.'],credits:['Credits','Balance and credit policy.'],billing:['Billing','Payments, orders and account billing.'],plans:['Plans','Capacity and plan management.'],docs:['Documentation','Developer guides and API reference.'],settings:['Settings & Security','Workspace and credential security.']};
+var N=[['dashboard','⌂','Overview'],['services','✦','AI Services'],['keys','⌁','API Keys'],['projects','□','Projects'],['builder','◇','AI Builder'],['deployments','↗','Deployments'],['usage','◌','Usage'],['credits','✦','Credits'],['billing','◈','Billing'],['plans','◆','Plans'],['docs','▤','Documentation'],['settings','⚙','Settings & Security']];
+function esc(v){return String(v==null?'':v).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[c]})}
+function toast(s,bad){var x=document.createElement('div');x.className='toast '+(bad?'error':'ok');x.textContent=s;document.body.appendChild(x);setTimeout(function(){x.remove()},2600)}
+async function api(path,opt){opt=opt||{};var h={'Content-Type':'application/json'};if(key)h.Authorization='Bearer '+key;opt.headers=Object.assign(h,opt.headers||{});var r=await fetch(path,opt),d=await r.json().catch(function(){return{}});if(!r.ok)throw Error(d.error||d.message||('HTTP '+r.status));return d}
+function head(){return '<div class="page-head"><div><span class="eyebrow">4N DEV CORE / DEVELOPER CONSOLE</span><h1>'+esc(P[page][0])+'</h1><p class="muted">'+esc(P[page][1])+'</p></div></div>'}
+function shell(){app.innerHTML='<div><header class="topbar"><div class="left"><button class="menu" id="menu">☰</button><div class="logo">4N</div><div class="brand"><b>4N DEV</b><small>Core Developer Platform</small></div><div class="context">Developer Console</div></div><div class="right"><span class="pill green">● CORE ONLINE</span><span class="pill" id="plan">—</span><span class="pill" id="credit">— credits</span><button class="btn" id="logout">Disconnect</button></div></header><div class="layout"><aside class="sidebar" id="sidebar"><div class="workspace"><div class="avatar">4N</div><div><b id="name">Developer</b><small>Developer workspace</small></div><i class="online-dot"></i></div><div class="nav-title">CORE PLATFORM</div>'+N.slice(0,6).map(function(n){return '<button class="nav" data-page="'+n[0]+'"><span>'+n[1]+'</span>'+n[2]+'</button>'}).join('')+'<div class="nav-title">USAGE & ACCOUNT</div>'+N.slice(6,10).map(function(n){return '<button class="nav" data-page="'+n[0]+'"><span>'+n[1]+'</span>'+n[2]+'</button>'}).join('')+'<div class="nav-title">RESOURCES</div>'+N.slice(10).map(function(n){return '<button class="nav" data-page="'+n[0]+'"><span>'+n[1]+'</span>'+n[2]+'</button>'}).join('')+'<div class="side-bottom">4N DEV Core <b>Operational</b><br>API v1 · portable Core infrastructure</div></aside><main id="main"></main></div></div>';
+ document.getElementById('menu').onclick=function(){document.getElementById('sidebar').classList.toggle('open')};document.getElementById('logout').onclick=function(){localStorage.removeItem('4ndev_api_key');location.reload()};document.querySelectorAll('.nav').forEach(function(b){b.onclick=function(){page=b.dataset.page;document.getElementById('sidebar').classList.remove('open');render()}})}
+function dashboard(){var m=me||{};return head()+'<section class="card hero"><span class="eyebrow">CENTRALIZED AI API ENGINE</span><h2>Build with AI. Power every 4N application.</h2><p class="muted">4N DEV Core is the shared AI infrastructure. Independent applications keep their own frontend and backend and consume Core services through 4ndev_sk API keys.</p><button class="btn primary" data-page="services">Explore AI Services</button> <button class="btn" data-page="keys">Manage API Keys</button></section><section class="grid grid4 section"><div class="card stat"><label>Plan</label><strong>'+esc((m.plan||'free').toUpperCase())+'</strong><small>Current developer plan</small><span class="glyph">◆</span></div><div class="card stat"><label>Credits</label><strong>'+(m.credits==null?'—':m.credits)+'</strong><small>Available capacity</small><span class="glyph">✦</span></div><div class="card stat"><label>API</label><strong>ONLINE</strong><small>Core API v1</small><span class="glyph">●</span></div><div class="card stat"><label>Auth</label><strong>ACTIVE</strong><small>Bearer · 4ndev_sk</small><span class="glyph">⌁</span></div></section><section class="grid grid2 section"><div class="card"><div class="card-head"><h3>Core services</h3><span class="pill green">READY</span></div><div class="activity"><b>Chat</b><span>/v1/chat</span></div><div class="activity"><b>Coding</b><span>/v1/coding</span></div><div class="activity"><b>Image</b><span>/v1/image</span></div><div class="activity"><b>Embeddings</b><span>/v1/embeddings</span></div></div><div class="card"><h3>Architecture</h3><p class="muted" style="font-size:10px;line-height:1.8">Core is not a container for the applications. Each 4N product remains independent and uses Core only as its centralized AI API engine.</p><div class="notice">Render is staging/testing. Production server introduction comes after portable production-ready infrastructure.</div></div></section>'}
+function services(){var a=[['✦','Chat','Conversational AI','/v1/chat'],['⌘','Coding','Code generation','/v1/coding'],['▣','Image','AI image generation','/v1/image'],['◎','Embeddings','Vector representations','/v1/embeddings']];return head()+'<div class="grid grid2">'+a.map(function(x){return '<article class="card service"><div class="icon">'+x[0]+'</div><h3>'+x[1]+'</h3><p>'+x[2]+'</p><code class="mono">'+x[3]+'</code></article>'}).join('')+'</div><div class="notice">These are Core services. Future AI services can be added without merging applications into Core.</div>'}
+function raw(title,d){return head()+'<div class="card"><div class="card-head"><h3>'+esc(title)+'</h3><span class="pill green">LIVE API</span></div><pre class="mono" style="white-space:pre-wrap;line-height:1.7;color:#aebbd0;margin-top:15px">'+esc(JSON.stringify(d,null,2))+'</pre></div>'}
+async function keys(){try{var d=await api('/v1/keys'),arr=d.keys||[];var html=head()+'<div class="card"><div class="card-head"><div><h3>Developer API Keys</h3><span class="muted">Manage credentials used by your applications.</span></div><button class="btn primary" id="newKey">Create API Key</button></div>';if(!arr.length)html+='<div class="empty"><div class="big">⌁</div><p>No API keys are listed for this workspace.</p></div>';arr.forEach(function(k){html+='<div class="key"><div><b>'+esc(k.name||'Developer')+'</b><small class="mono">'+esc(k.key||k.prefix||'4ndev_sk••••••••')+' · '+esc(k.planId||'free')+' · '+(k.active?'Active':'Revoked')+'</small></div><button class="btn '+(k.active?'danger':'')+'" data-toggle="'+esc(k.id)+'" data-active="'+k.active+'">'+(k.active?'Revoke':'Activate')+'</button></div>'});return html+'</div>'}catch(e){return head()+'<div class="card empty"><div class="big">!</div><p>'+esc(e.message)+'</p></div>'}}
+function login(){app.innerHTML='<div class="modal" style="position:static;min-height:100vh;background:var(--bg)"><div class="modal-card"><div class="logo">4N</div><span class="eyebrow" style="display:block;margin-top:18px">4N DEV CORE</span><h2>Developer Console</h2><p class="muted" style="font-size:10px;line-height:1.7">Connect an existing 4ndev_sk API key to manage the Core workspace.</p><input id="loginKey" class="field" placeholder="4ndev_sk_…" autocomplete="off"><div class="modal-actions"><button class="btn primary" id="loginBtn">Connect to Core</button></div></div></div>';document.getElementById('loginBtn').onclick=function(){var k=document.getElementById('loginKey').value.trim();if(k){localStorage.setItem('4ndev_api_key',k);location.reload()}}}
+function createKey(){var x=document.createElement('div');x.className='modal';x.innerHTML='<div class="modal-card"><h2>Create API key</h2><p class="muted" style="font-size:10px">Create a 4ndev_sk credential for this developer workspace.</p><input id="newKeyName" class="field" placeholder="Key name"><div class="modal-actions"><button class="btn" id="cancelKey">Cancel</button><button class="btn primary" id="saveKey">Create key</button></div></div>';document.body.appendChild(x);document.getElementById('cancelKey').onclick=function(){x.remove()};document.getElementById('saveKey').onclick=async function(){try{var d=await api('/v1/keys/create',{method:'POST',body:JSON.stringify({name:document.getElementById('newKeyName').value.trim()||'Developer'})});localStorage.setItem('4ndev_api_key',d.api_key);key=d.api_key;toast('API key created. Save it securely.');x.remove();load()}catch(e){toast(e.message,true)}}}
+async function render(){var m=document.getElementById('main');if(page==='dashboard')m.innerHTML=dashboard();else if(page==='services')m.innerHTML=services();else if(page==='keys')m.innerHTML=await keys();else if(page==='plans'){try{m.innerHTML=raw('Plans',await api('/v1/plans'))}catch(e){m.innerHTML=raw('Plans',{error:e.message})}}else if(page==='projects'){try{m.innerHTML=raw('Projects',await api('/v1/projects'))}catch(e){m.innerHTML=raw('Projects',{error:e.message})}}else if(page==='builder'){try{m.innerHTML=raw('AI Builder',await api('/v1/builder'))}catch(e){m.innerHTML=raw('AI Builder',{error:e.message})}}else if(page==='deployments'){try{m.innerHTML=raw('Deployments',await api('/v1/hosting/deployments'))}catch(e){m.innerHTML=raw('Deployments',{error:e.message})}}else if(page==='usage'){try{m.innerHTML=raw('Usage',await api('/v1/usage'))}catch(e){m.innerHTML=raw('Usage',{error:e.message})}}else if(page==='credits'){try{m.innerHTML=raw('Credits',await api('/v1/credits'))}catch(e){m.innerHTML=raw('Credits',{error:e.message})}}else if(page==='billing'){try{m.innerHTML=raw('Billing',await api('/v1/billing'))}catch(e){m.innerHTML=raw('Billing',{error:e.message})}}else if(page==='docs')m.innerHTML=head()+'<div class="grid grid2"><div class="card service"><div class="icon">▤</div><h3>Authentication</h3><p>Use your 4ndev_sk secret as a Bearer token from your server-side application.</p><code class="mono">Authorization: Bearer 4ndev_sk_…</code></div><div class="card service"><div class="icon">⌘</div><h3>API v1</h3><p>Stable Core endpoints for Chat, Coding, Image, Embeddings, Projects, Files and Builder.</p><code class="mono">/v1/</code></div></div>';else m.innerHTML=head()+'<div class="card"><h3>Workspace security</h3><p class="muted" style="font-size:10px;line-height:1.8">Keep 4ndev_sk secrets on your server. Never expose production API keys in public frontend code.</p></div>';document.querySelectorAll('[data-page]').forEach(function(b){b.onclick=function(){page=b.dataset.page;render()}});var nk=document.getElementById('newKey');if(nk)nk.onclick=createKey;document.querySelectorAll('[data-toggle]').forEach(function(b){b.onclick=async function(){try{await api('/v1/keys/'+encodeURIComponent(b.dataset.toggle),{method:'PATCH',body:JSON.stringify({active:b.dataset.active!=='true'})});toast('API key updated');render()}catch(e){toast(e.message,true)}}})}
+async function load(){if(!key){login();return}try{var d=await api('/v1/me');me=d.developer||{};shell();document.getElementById('name').textContent=me.name||'Developer';document.getElementById('plan').textContent=String(me.plan||'free').toUpperCase();document.getElementById('credit').textContent=String(me.credits==null?'—':me.credits)+' credits';document.querySelectorAll('.nav').forEach(function(b){b.classList.toggle('active',b.dataset.page===page)});render()}catch(e){localStorage.removeItem('4ndev_api_key');key='';login()}}
+load();})();
