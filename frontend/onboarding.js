@@ -12,6 +12,19 @@
 
     if (!button || !input) return;
 
+    const continueButton = document.getElementById("continueConsoleBtn");
+    continueButton?.addEventListener("click", function () {
+      const createdKey = window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";
+      if (!createdKey) {
+        const status = document.getElementById("copyStatus");
+        if (status) status.textContent = "No API key is available. Please create a new key.";
+        return;
+      }
+      localStorage.setItem("4ndev_api_key", createdKey);
+      sessionStorage.removeItem("4ndev_new_api_key");
+      window.location.assign("/console");
+    });
+
     startButtons.forEach((startButton) => {
       startButton.addEventListener("click", function () {
         overview?.classList.add("hidden");
