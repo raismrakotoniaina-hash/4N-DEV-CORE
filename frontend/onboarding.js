@@ -42,7 +42,8 @@
 
       localStorage.setItem("4ndev_api_key", existingKey);
       sessionStorage.removeItem("4ndev_new_api_key");
-      window.location.assign("/console");
+      // Open the console in the same application instead of relying on a redirect route.
+      window.location.assign("/?console=1");
     }
 
     async function copyCreatedKeyNow() {
