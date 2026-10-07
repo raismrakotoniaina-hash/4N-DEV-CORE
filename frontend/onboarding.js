@@ -42,6 +42,7 @@
 
       localStorage.setItem("4ndev_api_key", existingKey);
       sessionStorage.removeItem("4ndev_new_api_key");
+      if (typeof window.__4nSetApiKey === "function") window.__4nSetApiKey(existingKey);
       if (typeof window.__4nOpenConsole === "function") {
         window.__4nOpenConsole();
       } else {
