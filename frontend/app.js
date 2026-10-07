@@ -667,8 +667,7 @@ async function startOrder(planId) {
 function init() {
   const form = $("#createKeyForm");
 
-  $("#copyCreatedKey")?.addEventListener("click", copyCreatedKey);
-  $("#continueConsoleBtn")?.addEventListener("click", continueToConsole);
+  // Onboarding owns the copy and console navigation handlers to avoid duplicate click events.
   $("#logoutBtn")?.addEventListener("click", logoutDeveloper);
   $("#mobileNav")?.addEventListener("click", () => $("#sidebar")?.classList.toggle("open"));
   $("#brandHome")?.addEventListener("click", event => { event.preventDefault(); if (key) show("overview"); });
