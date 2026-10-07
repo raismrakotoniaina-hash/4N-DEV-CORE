@@ -219,6 +219,12 @@ function showConsole() {
   });
 }
 
+window.__4nOpenConsole = function () {
+  $("#onboardingScreen")?.classList.add("hidden");
+  $("#consoleScreen")?.classList.remove("hidden");
+  showConsole();
+};
+
 function title(titleText, subtitle, actions="") {
   return '<div class="page-title"><div><span class="eyebrow">4N DEV / CONSOLE</span><h1>'+esc(titleText)+'</h1><p class="muted">'+esc(subtitle)+'</p></div><div class="page-actions">'+actions+'</div></div>';
 }
