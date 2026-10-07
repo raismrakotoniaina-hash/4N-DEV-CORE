@@ -666,7 +666,7 @@ async function startOrder(planId) {
 
 function init() {
   const form = $("#createKeyForm");
-  $("#createKeyBtn")?.addEventListener("click", createDeveloperKey);
+
   $("#copyCreatedKey")?.addEventListener("click", copyCreatedKey);
   $("#continueConsoleBtn")?.addEventListener("click", continueToConsole);
   $("#logoutBtn")?.addEventListener("click", logoutDeveloper);
