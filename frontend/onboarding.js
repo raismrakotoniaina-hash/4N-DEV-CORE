@@ -29,24 +29,15 @@
     }
 
     function openConsole() {
-      const existingKey =
-        localStorage.getItem("4ndev_api_key") ||
-        window.__4nApiKey ||
-        sessionStorage.getItem("4ndev_new_api_key") ||
-        "";
+      const existingKey = localStorage.getItem("4ndev_api_key") || "";
 
       if (!existingKey) {
         openCreateStep();
         return;
       }
 
-      localStorage.setItem("4ndev_api_key", existingKey);
-      sessionStorage.removeItem("4ndev_new_api_key");
-      if (typeof window.__4nSetApiKey === "function") window.__4nSetApiKey(existingKey);
       if (typeof window.__4nOpenConsole === "function") {
         window.__4nOpenConsole();
-      } else {
-        window.location.reload();
       }
     }
 
@@ -150,8 +141,7 @@
           throw new Error("The Core API did not return an API key.");
         }
 
-        window.__4nApiKey = data.api_key;
-        sessionStorage.setItem("4ndev_new_api_key", data.api_key);
+        localStorage.setItem("4ndev_api_key", data.api_key);
 
         const created = document.getElementById("createdApiKey");
         const createdStep = document.getElementById("keyCreatedStep");
