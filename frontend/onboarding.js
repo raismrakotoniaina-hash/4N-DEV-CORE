@@ -29,9 +29,25 @@
     }
 
     function openConsole() {
-      const existingKey = localStorage.getItem("4ndev_api_key") || "";
+      let existingKey = localStorage.getItem("4ndev_api_key") || "";
+
+      // Recover the key from the current onboarding step if storage was
+      // cleared or unavailable after the key was created.
+      if (!existingKey) {
+        const createdKey = document.getElementById("createdApiKey")?.value?.trim() || "";
+        if (createdKey) {
+          try {
+            localStorage.setItem("4ndev_api_key", createdKey);
+            existingKey = createdKey;
+          } catch (_) {}
+        }
+      }
 
       if (!existingKey) {
+        // Only send the user to the creation form when there is truly
+        // no developer credential available.
+        overview?.classList.remove("hidden");
+        createStep?.classList.add("hidden");
         openCreateStep();
         return;
       }
@@ -87,8 +103,14 @@
       }
     }
 
-    topConsoleButton?.addEventListener("click", openConsole);
-    continueButton?.addEventListener("click", openConsole);
+    topConsoleButton?.addEventListener("click", function (event) {
+      event.preventDefault();
+      openConsole();
+    });
+    continueButton?.addEventListener("click", function (event) {
+      event.preventDefault();
+      openConsole();
+    });
     copyButton?.addEventListener("click", copyCreatedKeyNow);
 
     startButtons.forEach((startButton) => {

@@ -57,3 +57,23 @@
   .hero-actions{flex-direction:column}
   .hero-actions button{width:100%}
 }
+
+
+/* Final mobile stability fixes */
+@media(max-width:800px){
+  .landing-nav{width:100%;overflow:hidden}
+  .landing-nav .brand{min-width:0;flex-shrink:1}
+  .landing-nav .brand > span:last-child{min-width:0;overflow:hidden}
+  .landing-nav .brand b,.landing-nav .brand small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .landing-actions{min-width:0;max-width:55%}
+  .landing-actions .top-console-btn{width:auto;min-width:0;max-width:100%;white-space:normal;line-height:1.25;text-align:center;overflow-wrap:anywhere}
+  .landing{min-width:0;overflow:hidden}
+  .hero-copy,.onboarding-card,.platform-preview{min-width:0}
+  .hero-copy h1,.hero-copy>p,.onboarding-card h2,.onboarding-card .sub,.onboarding-card .fine{overflow-wrap:anywhere;word-break:normal}
+}
+@media(max-width:500px){
+  .landing-nav{gap:7px}
+  .landing-nav .brand-logo{flex:0 0 32px}
+  .landing-actions{max-width:52%}
+  .landing-actions .top-console-btn{font-size:8px;padding:7px 8px}
+}
