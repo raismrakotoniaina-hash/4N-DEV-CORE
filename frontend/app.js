@@ -349,7 +349,7 @@ const pages = {overview,models,playground,apiKeys,projects,builder,deployments,u
 
 function show(page) {
   const render = pages[page] || overview;
-  $$(".nav").forEach(nav => nav.classList.toggle("active", nav.dataset.page === page));
+  $$$(".nav").forEach(nav => nav.classList.toggle("active", nav.dataset.page === page));
   $("#main").innerHTML = render();
   $("#sidebar")?.classList.remove("open");
   bind(page);
