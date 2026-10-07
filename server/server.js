@@ -40,16 +40,25 @@ app.disable("x-powered-by");
 app.use(helmet());
 app.use(cors());
 
-app.use("/frontend", express.static(FRONTEND_DIR, { etag: false, lastModified: false, maxAge: 0, setHeaders: (res, filePath) => { if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate"); } }));
+app.use("/frontend", express.static(FRONTEND_DIR, {
+  etag: false,
+  lastModified: false,
+  maxAge: 0,
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/.test(filePath)) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    }
+  }
+}));
 
 // Public developer console. Keep this route separate from /health so the root URL
 // always opens the frontend and never the API health payload.
 app.get("/", (_req, res) => {
   // Redirect to the static frontend entry point so Render never serves an API payload at root.
-  res.redirect(302, "/frontend/index.html?v=20261007-03");
+  res.redirect(302, "/frontend/index.html?v=20261007-05");
 });
 
-app.get("/console", (_req, res) => res.redirect(302, "/frontend/index.html?v=20261007-03"));
+app.get("/console", (_req, res) => res.redirect(302, "/frontend/index.html?v=20261007-05"));
 
 app.use((req, res, next) => {
   const requestId = req.get("x-request-id") || createRequestId();
