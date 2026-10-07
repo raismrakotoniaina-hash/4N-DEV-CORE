@@ -134,25 +134,29 @@ async function refreshMe() {
   return me;
 }
 
-function showConsole() {
-  show("overview");
+function showConsole(page = "overview") {
+  show(page);
   void refreshMe().catch(error => {
     console.error("4N DEV console refresh:", error);
     toast("Console opened. Account details could not be refreshed yet.", "error");
   });
 }
 
-window.__4nOpenConsole = function () {
+function openDeveloperConsole() {
   const storedKey = localStorage.getItem("4ndev_api_key") || "";
   if (!storedKey) {
     showOnboarding();
-    return;
+    return false;
   }
   key = storedKey;
   $("#onboardingScreen")?.classList.add("hidden");
   $("#consoleScreen")?.classList.remove("hidden");
-  showConsole();
-};
+  showConsole("overview");
+  return true;
+}
+
+window.__4nOpenConsole = openDeveloperConsole;
+window.addEventListener("4n:open-console", openDeveloperConsole);
 
 function title(titleText, subtitle, actions="") {
   return '<div class="page-title"><div><span class="eyebrow">4N DEV / CONSOLE</span><h1>'+esc(titleText)+'</h1><p class="muted">'+esc(subtitle)+'</p></div><div class="page-actions">'+actions+'</div></div>';
@@ -283,8 +287,55 @@ print(response.json())</pre></div>'+
   '</tbody></table></div></div>';
 }
 
+function apiReference() {
+  const rows = [
+    ["Chat","POST","/v1/chat","Conversational AI","1 credit"],
+    ["Coding","POST","/v1/coding","Code generation and debugging","5 credits"],
+    ["Image","POST","/v1/image","Image generation","10–50 credits"],
+    ["Embeddings","POST","/v1/embeddings","Vector embeddings","1 credit"],
+    ["Credits","GET","/v1/credits","Current credit balance","—"],
+    ["Plans","GET","/v1/plans","Available plans","—"],
+    ["Projects","GET / POST","/v1/projects","Create and manage projects","—"],
+    ["Files","GET / POST / PUT / DELETE","/v1/projects/:id/files","Project files","—"],
+    ["Builder","POST","/v1/builder","Generate, review, build and deploy","10 credits"],
+    ["Builds","POST / GET","/v1/builds","Project build operations","—"],
+    ["Deployments","POST / GET","/v1/hosting/deployments","Publish applications","—"],
+    ["Usage","GET","/v1/usage","Authenticated usage history","—"]
+  ];
+  return title("API Reference","Complete Core API surface available to your developer key.",
+    '<button class="ghost" data-go="docs">Getting Started →</button>')+
+    '<div class="notice"><b>Base URL</b><div class="endpoint api-base">https://fourn-dev-core.onrender.com</div><p class="muted small">Use <code>/v1</code> for versioned developer endpoints. Authentication uses <code>Authorization: Bearer &lt;4ndev_sk_...&gt;</code>.</p></div>'+
+    '<div class="section"><div class="card table-wrap"><table class="table api-table"><thead><tr><th>Resource</th><th>Method</th><th>Endpoint</th><th>Purpose</th><th>Cost</th></tr></thead><tbody>'+
+    rows.map(row => '<tr><td><b>'+row[0]+'</b></td><td>'+row[1]+'</td><td class="endpoint">'+row[2]+'</td><td>'+row[3]+'</td><td><span class="pill">'+row[4]+'</span></td></tr>').join("")+
+    '</tbody></table></div></div>'+
+    '<div class="section"><div class="grid2"><div class="card"><h3>Authentication</h3><pre class="code">Authorization: Bearer 4ndev_sk_live_...</pre><p class="muted small">Keep the secret on your server. Do not expose it in browser-side application code.</p></div><div class="card"><h3>Standard request</h3><pre class="code">POST /v1/chat
+Content-Type: application/json
+
+{"input":"Hello"}</pre><p class="muted small">The response contains the model output and usage metadata when available.</p></div></div></div>';
+}
+
+function support() {
+  return title("Support","Get help with integration, billing, Builder and deployment workflows.",
+    '<button class="ghost" data-go="docs">Open Documentation →</button>')+
+    '<div class="support-hero card"><div><span class="eyebrow">DEVELOPER SUPPORT</span><h2>Build without getting stuck.</h2><p class="muted">Start with the documentation and system status. If a request fails, copy the diagnostic context below so it can be shared with your support contact.</p></div><span class="pill ok">CORE ONLINE</span></div>'+
+    '<div class="section"><div class="grid3">'+
+      '<div class="card action-card"><div class="model-icon">▤</div><h3>Documentation</h3><p class="muted small">Authentication, API examples, Builder, projects, usage and billing.</p><button class="ghost" data-go="docs">Read docs →</button></div>'+
+      '<div class="card action-card"><div class="model-icon">●</div><h3>System status</h3><p class="muted small">Check the live Core API health endpoint and service state.</p><button class="ghost" data-go="status">Check status →</button></div>'+
+      '<div class="card action-card"><div class="model-icon">⌁</div><h3>API diagnostics</h3><p class="muted small">Copy a safe diagnostic summary without exposing your secret API key.</p><button id="copyDiagnostics" class="ghost" type="button">Copy diagnostics →</button></div>'+
+    '</div></div>'+
+    '<div class="section"><div class="card"><div class="section-head"><h2>Common questions</h2></div><div class="faq"><details open><summary>Where should I store my API key?</summary><p>Store it as a server-side environment variable such as <code>FOURN_DEV_API_KEY</code>. Never commit it to a repository.</p></details><details><summary>How are credits charged?</summary><p>Each API capability has a defined credit cost. Use Usage and Billing to monitor the balance and orders.</p></details><details><summary>How do I publish a project?</summary><p>Create a project, add files, build it, then use Deployments to publish and manage the application.</p></details><details><summary>What if an API request fails?</summary><p>Check the API key, endpoint, request body and current credits first. Then use the diagnostic action on this page.</p></details></div></div></div>';
+}
+
+function status() {
+  return title("System Status","Live service health for the 4N DEV Core platform.",
+    '<button id="refreshStatus" class="ghost" type="button">Refresh status</button>')+
+    '<div class="status-overview"><div class="card status-main"><div class="status-head"><span>4N DEV Core API</span><span id="healthBadge" class="badge">CHECKING</span></div><h2 id="healthTitle">Checking service health…</h2><p id="healthMessage" class="muted small">Contacting the public health endpoint.</p><div id="healthMeta" class="status-meta"></div></div><div class="card"><span class="eyebrow">SERVICE SURFACE</span><div class="service-check"><span>API</span><b>v1</b></div><div class="service-check"><span>Authentication</span><b>Bearer keys</b></div><div class="service-check"><span>Builder</span><b>Available</b></div><div class="service-check"><span>Billing</span><b>Available</b></div><div class="service-check"><span>Deployments</span><b>Available</b></div></div></div>'+
+    '<div class="section"><div class="notice"><b>Operational guidance:</b> if the status is healthy but a protected request fails, check your developer key, credits and request payload in the console.</div></div>';
+}
+
 function settings() {
-  return title("Settings","Developer account and local console security.")+
+  return title("Settings & Security","Manage your developer identity, local access and integration security.",
+    '<button class="ghost" data-go="apiKeys">Manage API keys →</button>')+
   '<div class="grid2"><div class="card"><div class="section-head"><h2>Developer account</h2><span class="pill ok">ACTIVE</span></div>'+
   '<div class="settings-row"><span>Name</span><b>'+esc(me?.name || "—")+'</b></div>'+
   '<div class="settings-row"><span>Account ID</span><b class="mono">'+esc(me?.id || "—")+'</b></div>'+
@@ -294,7 +345,7 @@ function settings() {
   '<div class="card"><div class="section-head"><h2>Security</h2></div><p class="muted small">Your API key is stored in this browser only after you explicitly continue into the Developer Console. Do not use browser storage for production application secrets.</p><div class="security-list"><div>✓ Bearer authentication</div><div>✓ API key never shown by /v1/me</div><div>✓ Protected project isolation</div><div>✓ Input and path validation</div></div><button id="settingsLogout" class="danger" type="button">Disconnect this device</button></div></div>';
 }
 
-const pages = {overview,models,playground,apiKeys,projects,builder,deployments,usage,billing,docs,settings};
+const pages = {overview,models,playground,apiKeys,projects,builder,deployments,usage,billing,docs,apiReference,support,status,settings};
 
 function show(page) {
   const render = pages[page] || overview;
@@ -348,6 +399,29 @@ function bind(page) {
         : 'const response = await fetch("https://fourn-dev-core.onrender.com/v1/chat", {method:"POST", headers:{"Authorization":"Bearer "+process.env.FOURN_DEV_API_KEY,"Content-Type":"application/json"}, body:JSON.stringify({input:"Hello"})});';
       toast(await copyText(text) ? "Example copied." : "Copy failed.", "success");
     }));
+  }
+  if (page === "docs") {
+    // Keep documentation navigation lightweight and deterministic.
+  }
+  if (page === "apiReference") {
+    $(".api-base")?.addEventListener("click", async () => toast(await copyText(API + "/v1") ? "Base API URL copied." : "Copy failed.", "success"));
+  }
+  if (page === "support") {
+    $("#copyDiagnostics")?.addEventListener("click", async () => {
+      const diagnostic = [
+        "4N DEV Core diagnostic",
+        "API: "+API+"/v1",
+        "Plan: "+(me?.plan || "unknown"),
+        "Credits: "+(me?.credits ?? "unknown"),
+        "Account: "+(me?.id || "unknown"),
+        "Browser: "+navigator.userAgent
+      ].join("\n");
+      toast(await copyText(diagnostic) ? "Safe diagnostics copied." : "Copy failed.", "success");
+    });
+  }
+  if (page === "status") {
+    $("#refreshStatus")?.addEventListener("click", loadSystemStatus);
+    loadSystemStatus();
   }
   if (page === "settings") $("#settingsLogout")?.addEventListener("click", logoutDeveloper);
 }
@@ -430,6 +504,33 @@ async function buildBuilder() {
   } finally {
     button.disabled = false;
     $("#builderStatus").textContent = "";
+  }
+}
+
+async function loadSystemStatus() {
+  const badge = $("#healthBadge");
+  const titleNode = $("#healthTitle");
+  const message = $("#healthMessage");
+  const meta = $("#healthMeta");
+  if (!badge) return;
+  badge.textContent = "CHECKING";
+  badge.className = "badge";
+  try {
+    const started = Date.now();
+    const response = await fetch(API + "/health", {cache:"no-store"});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    badge.textContent = "OPERATIONAL";
+    badge.className = "badge green";
+    titleNode.textContent = data.name || "4N DEV Core API is online";
+    message.textContent = data.status ? "Service status: " + data.status : "Public health endpoint responded successfully.";
+    meta.innerHTML = '<span>Response</span><b>'+esc((Date.now()-started)+" ms")+'</b><span>Version</span><b>'+esc(data.version || "v1")+'</b><span>Environment</span><b>Production</b>';
+  } catch (error) {
+    badge.textContent = "DEGRADED";
+    badge.className = "badge red";
+    titleNode.textContent = "Core API could not be verified";
+    message.textContent = error.message || "Health check failed.";
+    meta.innerHTML = '<span>Endpoint</span><b>'+esc(API+"/health")+'</b>';
   }
 }
 
@@ -604,14 +705,20 @@ function init() {
   $("#logoutBtn")?.addEventListener("click", logoutDeveloper);
   $("#mobileNav")?.addEventListener("click", () => $("#sidebar")?.classList.toggle("open"));
   $("#brandHome")?.addEventListener("click", event => { event.preventDefault(); if (key) show("overview"); });
-  $("#getStartedBtn")?.addEventListener("click", focusOnboarding);
-  $("#heroGetStarted")?.addEventListener("click", focusOnboarding);
-  $("#heroDocs")?.addEventListener("click", () => {
-    $("#onboardingCard")?.scrollIntoView({behavior:"smooth",block:"center"});
-    toast("Create a key first to open the Developer Console.");
+  $("#landingDocsBtn")?.addEventListener("click", () => {
+    document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth",block:"center"});
   });
-  $("#landingBrand")?.addEventListener("click", event => { event.preventDefault(); focusOnboarding(); });
-  $$(".nav").forEach(nav => nav.addEventListener("click", () => show(nav.dataset.page)));
+  $("#openConsoleTopBtn")?.addEventListener("click", event => {
+    event.preventDefault();
+    openDeveloperConsole();
+  });
+  $("#continueConsoleBtn")?.addEventListener("click", event => {
+    event.preventDefault();
+    openDeveloperConsole();
+  });
+  $("#copyCreatedKey")?.addEventListener("click", copyCreatedKey);
+  $("#landingBrand")?.addEventListener("click", event => { event.preventDefault(); window.scrollTo({top:0,behavior:"smooth"}); });
+  $(".nav").forEach(nav => nav.addEventListener("click", () => show(nav.dataset.page)));
 
   if (key) showConsole();
   else showOnboarding();

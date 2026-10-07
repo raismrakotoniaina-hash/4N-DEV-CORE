@@ -7,10 +7,8 @@
     const error = document.getElementById("createKeyError");
     const overview = document.getElementById("platformOverview");
     const createStep = document.getElementById("createKeyStep");
+    const createdStep = document.getElementById("keyCreatedStep");
     const backButton = document.getElementById("backToPlatformBtn");
-    const topConsoleButton = document.getElementById("openConsoleTopBtn");
-    const copyButton = document.getElementById("copyCreatedKey");
-    const continueButton = document.getElementById("continueConsoleBtn");
     const startButtons = [
       document.getElementById("startBuildingBtn"),
       document.getElementById("startAccessBtn")
@@ -21,115 +19,29 @@
     function openCreateStep() {
       overview?.classList.add("hidden");
       createStep?.classList.remove("hidden");
-      input.focus();
-      document.getElementById("platformAccess")?.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-      });
+      createdStep?.classList.add("hidden");
+      document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth", block:"center"});
+      setTimeout(() => input.focus(), 250);
     }
 
-    function openConsole() {
-      let existingKey = localStorage.getItem("4ndev_api_key") || "";
-
-      // Recover the key from the current onboarding step if storage was
-      // cleared or unavailable after the key was created.
-      if (!existingKey) {
-        const createdKey = document.getElementById("createdApiKey")?.value?.trim() || "";
-        if (createdKey) {
-          try {
-            localStorage.setItem("4ndev_api_key", createdKey);
-            existingKey = createdKey;
-          } catch (_) {}
-        }
-      }
-
-      if (!existingKey) {
-        // Only send the user to the creation form when there is truly
-        // no developer credential available.
-        overview?.classList.remove("hidden");
-        createStep?.classList.add("hidden");
-        openCreateStep();
-        return;
-      }
-
-      if (typeof window.__4nOpenConsole === "function") {
-        window.__4nOpenConsole();
-      }
-    }
-
-    async function copyCreatedKeyNow() {
-      const created = document.getElementById("createdApiKey");
-      const status = document.getElementById("copyStatus");
-      const value = created?.value || "";
-
-      if (!value) {
-        if (status) status.textContent = "No API key is available.";
-        return;
-      }
-
-      let copied = false;
-
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(value);
-          copied = true;
-        }
-      } catch (_) {}
-
-      if (!copied) {
-        const area = document.createElement("textarea");
-        area.value = value;
-        area.setAttribute("readonly", "");
-        area.style.position = "fixed";
-        area.style.left = "-9999px";
-        document.body.appendChild(area);
-        area.focus();
-        area.select();
-        area.setSelectionRange(0, area.value.length);
-
-        try {
-          copied = document.execCommand("copy");
-        } catch (_) {
-          copied = false;
-        }
-
-        area.remove();
-      }
-
-      if (status) {
-        status.textContent = copied
-          ? "API key copied to clipboard."
-          : "Copy failed. Long-press the key to copy it manually.";
-      }
-    }
-
-    topConsoleButton?.addEventListener("click", function (event) {
+    startButtons.forEach(item => item.addEventListener("click", event => {
       event.preventDefault();
-      openConsole();
-    });
-    continueButton?.addEventListener("click", function (event) {
+      openCreateStep();
+    }));
+
+    backButton?.addEventListener("click", event => {
       event.preventDefault();
-      openConsole();
-    });
-    copyButton?.addEventListener("click", copyCreatedKeyNow);
-
-    startButtons.forEach((startButton) => {
-      startButton.addEventListener("click", openCreateStep);
-    });
-
-    backButton?.addEventListener("click", function () {
       createStep?.classList.add("hidden");
+      createdStep?.classList.add("hidden");
       overview?.classList.remove("hidden");
     });
 
     async function createKey() {
       const name = (input.value || "").trim();
-
       if (error) {
         error.textContent = "";
         error.classList.add("hidden");
       }
-
       if (!name) {
         if (error) {
           error.textContent = "Developer or company name is required.";
@@ -145,38 +57,24 @@
 
       try {
         const response = await fetch("/v1/keys/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name })
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({name})
         });
-
-        let data = {};
-        try {
-          data = await response.json();
-        } catch (_) {}
-
-        if (!response.ok) {
-          throw new Error(data.error || data.message || ("HTTP " + response.status));
-        }
-
-        if (!data.api_key) {
-          throw new Error("The Core API did not return an API key.");
-        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || data.message || ("HTTP " + response.status));
+        if (!data.api_key) throw new Error("The Core API did not return an API key.");
 
         localStorage.setItem("4ndev_api_key", data.api_key);
-
         const created = document.getElementById("createdApiKey");
-        const createdStep = document.getElementById("keyCreatedStep");
-
         if (created) created.value = data.api_key;
         createStep?.classList.add("hidden");
+        overview?.classList.add("hidden");
         createdStep?.classList.remove("hidden");
-
-        const status = document.getElementById("copyStatus");
-        if (status) status.textContent = "Key created successfully.";
+        const copyStatus = document.getElementById("copyStatus");
+        if (copyStatus) copyStatus.textContent = "Key created successfully.";
       } catch (err) {
         console.error("4N DEV onboarding error:", err);
-
         if (error) {
           error.textContent = err.message || "Unable to create API key.";
           error.classList.remove("hidden");
@@ -188,9 +86,11 @@
       }
     }
 
-    button.addEventListener("click", createKey);
-
-    input.addEventListener("keydown", function (event) {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      createKey();
+    });
+    input.addEventListener("keydown", event => {
       if (event.key === "Enter") {
         event.preventDefault();
         createKey();
@@ -198,9 +98,6 @@
     });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initOnboarding);
-  } else {
-    initOnboarding();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initOnboarding);
+  else initOnboarding();
 })();
