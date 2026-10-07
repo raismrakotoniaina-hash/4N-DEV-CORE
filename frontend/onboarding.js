@@ -8,30 +8,95 @@
     const overview = document.getElementById("platformOverview");
     const createStep = document.getElementById("createKeyStep");
     const backButton = document.getElementById("backToPlatformBtn");
-    const startButtons = [document.getElementById("startBuildingBtn"), document.getElementById("startAccessBtn")].filter(Boolean);\n    const topConsoleButton = document.getElementById("openConsoleTopBtn");\n    const copyButton = document.getElementById("copyCreatedKey");
+    const topConsoleButton = document.getElementById("openConsoleTopBtn");
+    const copyButton = document.getElementById("copyCreatedKey");
+    const continueButton = document.getElementById("continueConsoleBtn");
+    const startButtons = [
+      document.getElementById("startBuildingBtn"),
+      document.getElementById("startAccessBtn")
+    ].filter(Boolean);
 
-    if (!button || !input) return;\n\n    async function copyCreatedKeyNow() {\n      const created = document.getElementById("createdApiKey");\n      const status = document.getElementById("copyStatus");\n      const value = created?.value || "";\n      if (!value) { if (status) status.textContent = "No API key is available."; return; }\n      let copied = false;\n      try {\n        if (navigator.clipboard && window.isSecureContext) {\n          await navigator.clipboard.writeText(value);\n          copied = true;\n        }\n      } catch (_) {}\n      if (!copied) {\n        const area = document.createElement("textarea");\n        area.value = value;\n        area.setAttribute("readonly", "");\n        area.style.position = "fixed";\n        area.style.left = "-9999px";\n        document.body.appendChild(area);\n        area.focus();\n        area.select();\n        area.setSelectionRange(0, area.value.length);\n        try { copied = document.execCommand("copy"); } catch (_) { copied = false; }\n        area.remove();\n      }\n      if (status) status.textContent = copied ? "API key copied to clipboard." : "Copy failed. Long-press the key to copy it manually.";\n    }\n\n    copyButton?.addEventListener("click", copyCreatedKeyNow);
+    if (!button || !input) return;
 
-    topConsoleButton?.addEventListener("click", function () {\n      const existingKey = localStorage.getItem("4ndev_api_key") || window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";\n      if (existingKey) {\n        localStorage.setItem("4ndev_api_key", existingKey);\n        sessionStorage.removeItem("4ndev_new_api_key");\n        window.location.assign("/console");\n        return;\n      }\n      overview?.classList.add("hidden");\n      createStep?.classList.remove("hidden");\n      input.focus();\n      document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth", block:"center"});\n    });\n\n    const continueButton = document.getElementById("continueConsoleBtn");
-    continueButton?.addEventListener("click", function () {
-      const createdKey = window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";
-      if (!createdKey) {
-        const status = document.getElementById("copyStatus");
-        if (status) status.textContent = "No API key is available. Please create a new key.";
+    function openCreateStep() {
+      overview?.classList.add("hidden");
+      createStep?.classList.remove("hidden");
+      input.focus();
+      document.getElementById("platformAccess")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }
+
+    function openConsole() {
+      const existingKey =
+        localStorage.getItem("4ndev_api_key") ||
+        window.__4nApiKey ||
+        sessionStorage.getItem("4ndev_new_api_key") ||
+        "";
+
+      if (!existingKey) {
+        openCreateStep();
         return;
       }
-      localStorage.setItem("4ndev_api_key", createdKey);
+
+      localStorage.setItem("4ndev_api_key", existingKey);
       sessionStorage.removeItem("4ndev_new_api_key");
       window.location.assign("/console");
-    });
+    }
+
+    async function copyCreatedKeyNow() {
+      const created = document.getElementById("createdApiKey");
+      const status = document.getElementById("copyStatus");
+      const value = created?.value || "";
+
+      if (!value) {
+        if (status) status.textContent = "No API key is available.";
+        return;
+      }
+
+      let copied = false;
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+          copied = true;
+        }
+      } catch (_) {}
+
+      if (!copied) {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        area.setSelectionRange(0, area.value.length);
+
+        try {
+          copied = document.execCommand("copy");
+        } catch (_) {
+          copied = false;
+        }
+
+        area.remove();
+      }
+
+      if (status) {
+        status.textContent = copied
+          ? "API key copied to clipboard."
+          : "Copy failed. Long-press the key to copy it manually.";
+      }
+    }
+
+    topConsoleButton?.addEventListener("click", openConsole);
+    continueButton?.addEventListener("click", openConsole);
+    copyButton?.addEventListener("click", copyCreatedKeyNow);
 
     startButtons.forEach((startButton) => {
-      startButton.addEventListener("click", function () {
-        overview?.classList.add("hidden");
-        createStep?.classList.remove("hidden");
-        input.focus();
-        document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth", block:"center"});
-      });
+      startButton.addEventListener("click", openCreateStep);
     });
 
     backButton?.addEventListener("click", function () {
@@ -41,6 +106,7 @@
 
     async function createKey() {
       const name = (input.value || "").trim();
+
       if (error) {
         error.textContent = "";
         error.classList.add("hidden");
@@ -67,7 +133,9 @@
         });
 
         let data = {};
-        try { data = await response.json(); } catch (_) {}
+        try {
+          data = await response.json();
+        } catch (_) {}
 
         if (!response.ok) {
           throw new Error(data.error || data.message || ("HTTP " + response.status));
@@ -81,23 +149,22 @@
         sessionStorage.setItem("4ndev_new_api_key", data.api_key);
 
         const created = document.getElementById("createdApiKey");
-        const createStep = document.getElementById("createKeyStep");
         const createdStep = document.getElementById("keyCreatedStep");
 
         if (created) created.value = data.api_key;
-        if (createStep) createStep.classList.add("hidden");
-        if (createdStep) createdStep.classList.remove("hidden");
+        createStep?.classList.add("hidden");
+        createdStep?.classList.remove("hidden");
 
         const status = document.getElementById("copyStatus");
         if (status) status.textContent = "Key created successfully.";
-
-        button.disabled = false;
       } catch (err) {
         console.error("4N DEV onboarding error:", err);
+
         if (error) {
           error.textContent = err.message || "Unable to create API key.";
           error.classList.remove("hidden");
         }
+      } finally {
         button.disabled = false;
         button.classList.remove("loading");
         button.innerHTML = "<span>Create API key</span><b>→</b>";
@@ -105,6 +172,7 @@
     }
 
     button.addEventListener("click", createKey);
+
     input.addEventListener("keydown", function (event) {
       if (event.key === "Enter") {
         event.preventDefault();
