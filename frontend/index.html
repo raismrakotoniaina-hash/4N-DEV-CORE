@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#070914">
-<meta name="description" content="4N DEV Developer Platform — AI APIs, projects, Builder, deployments, usage and billing.">
+<meta name="description" content="4N DEV Developer Platform — AI APIs, models, projects, Builder, deployments, usage, billing and developer support.">
 <title>4N DEV — Developer Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/frontend/styles.css?v=20261007-05">
+<link rel="stylesheet" href="/frontend/styles.css?v=20261007-06">
 </head>
 <body>
 <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div><div class="noise"></div>
@@ -17,34 +17,20 @@
 <section id="onboardingScreen" class="onboarding">
   <header class="landing-nav">
     <a class="brand" href="/" id="landingBrand"><span class="brand-logo">4N</span><span><b>4N DEV</b><small>Developer Platform</small></span></a>
-    <div class="landing-actions">
-      <span class="secure"><i></i> Core API operational</span>
-      <a class="nav-link" href="#platformAccess">Developer access</a><button id="openConsoleTopBtn" class="ghost top-console-btn" type="button">Open Developer Console</button>
-    </div>
+    <nav class="public-nav" aria-label="Public navigation">
+      <a href="#platformAccess">Platform</a><a href="#platformAccess">API</a><a href="#platformAccess">Builder</a><a href="#platformAccess">Pricing</a>
+    </nav>
+    <div class="landing-actions"><span class="secure"><i></i> Core API operational</span><button id="openConsoleTopBtn" class="ghost top-console-btn" type="button">Open Console</button></div>
   </header>
 
   <main class="landing">
     <section class="hero-copy">
       <span class="eyebrow">4N DEV / DEVELOPER PLATFORM</span>
-      <h1>Your AI<br><em>developer workspace.</em></1>
-      <p>Build, test and ship with one professional workspace for AI models, API keys, projects, Builder, deployments, usage and billing.</p>
-
-      <div class="hero-actions">
-        <button id="startBuildingBtn" class="primary hero-button" type="button">Start building free <span>→</span></button>
-      </div>
-
-      <div class="hero-points">
-        <span>✦ AI Models</span><span>⌁ API Keys</span><span>□ Projects</span><span>◇ AI Builder</span><span>↗ Deployments</span>
-      </div>
-
-      <div class="platform-preview">
-        <div class="preview-top"><span><i></i> 4N DEV Core</span><b>Production</b></div>
-        <div class="preview-grid">
-          <div><small>WORKSPACE</small><strong>Developer</strong><span>API v1</span></div>
-          <div><small>MODELS</small><strong>4 capabilities</strong><span>Chat · Code · Image · Embeddings</span></div>
-          <div><small>OPERATE</small><strong>Usage & Billing</strong><span>Credits, plans & activity</span></div>
-        </div>
-      </div>
+      <h1>Build with AI.<br><em>Ship with 4N DEV.</em></h1>
+      <p>One professional workspace for AI models, API keys, playground testing, projects, AI Builder, deployments, usage and billing.</p>
+      <div class="hero-actions"><button id="startBuildingBtn" class="primary hero-button" type="button">Start building free <span>→</span></button><button id="landingDocsBtn" class="ghost hero-button" type="button">Developer docs</button></div>
+      <div class="hero-points"><span>✦ Models</span><span>⌁ API</span><span>□ Projects</span><span>◇ Builder</span><span>↗ Deploy</span></div>
+      <div class="landing-trust"><span><i></i> API v1</span><span><i></i> Secure Bearer auth</span><span><i></i> Credit-based billing</span></div>
     </section>
 
     <section id="platformAccess" class="onboarding-card">
@@ -52,38 +38,36 @@
         <div class="card-top"><span class="step">DEVELOPER PLATFORM</span><span class="lock">Secure workspace access</span></div>
         <div class="card-icon">✦</div>
         <span class="eyebrow">ONE WORKSPACE</span>
-        <h2>Everything you need to build with 4N DEV</h2>
-        <p class="sub">Create your free developer workspace, receive your 4N DEV API key, then manage your models, projects, usage and billing from one console.</p>
-
+        <h2>Your developer control center</h2>
+        <p class="sub">Create a free workspace once. Your console then connects you to the models, projects, Builder, deployments, usage and billing already available in 4N DEV Core.</p>
         <div class="access-list">
-          <div><b>01</b><span><strong>Developer API</strong><small>Secure Bearer authentication with your own API key.</small></span></div>
-          <div><b>02</b><span><strong>AI services</strong><small>Chat, coding, image generation and embeddings.</small></span></div>
-          <div><b>03</b><span><strong>Build & deploy</strong><small>Projects, AI Builder and deployment workflows.</small></span></div>
-          <div><b>04</b><span><strong>Usage & billing</strong><small>Credits, plans, activity and account controls.</small></span></div>
+          <div><b>01</b><span><strong>AI infrastructure</strong><small>Chat, coding, image generation and embeddings.</small></span></div>
+          <div><b>02</b><span><strong>Application workspace</strong><small>Projects, files, builds and deployments.</small></span></div>
+          <div><b>03</b><span><strong>AI Builder</strong><small>Plan, generate, review, build and deploy.</small></span></div>
+          <div><b>04</b><span><strong>Operate & scale</strong><small>Credits, plans, orders, usage and account security.</small></span></div>
         </div>
-
         <button id="startAccessBtn" class="primary full" type="button">Create free developer workspace <span>→</span></button>
-        <p class="fine">No existing API key is required. 4N DEV creates your developer credential during onboarding.</p>
+        <p class="fine">No provider API key is required. 4N DEV creates your developer credential during onboarding.</p>
       </div>
 
       <div id="createKeyStep" class="hidden">
         <div class="card-top"><span class="step">01 / DEVELOPER ACCESS</span><span class="lock">Secure onboarding</span></div>
         <div class="card-icon">⌁</div>
         <h2>Create your developer workspace</h2>
-        <p class="sub">Choose the developer or company name for your 4N DEV workspace. Your free API key will be generated automatically.</p>
+        <p class="sub">Use your developer or company name. Your free 4N DEV API key will be generated automatically.</p>
         <label for="developerName">Developer or company name</label>
         <input id="developerName" class="field large-field" maxlength="80" autocomplete="name" placeholder="e.g. Ismael or 4N Dev" required>
         <button id="createKeyBtn" class="primary full" type="button"><span>Create API key</span><b>→</b></button>
         <div id="createKeyError" class="error hidden" role="alert"></div>
         <button id="backToPlatformBtn" class="ghost full" type="button">Back to platform overview</button>
-        <p class="fine">Your secret is displayed once after creation. Store it securely and never publish it in a repository or browser-side production application.</p>
+        <p class="fine">The full secret is shown once. Store it securely and never publish it in a repository or browser-side production application.</p>
       </div>
 
       <div id="keyCreatedStep" class="hidden">
         <div class="success-mark">✓</div>
         <span class="eyebrow">WORKSPACE CREATED</span>
-        <h2>Your developer access is ready</h2>
-        <p class="sub">Copy your API key now. The full secret is only shown during this onboarding step.</p>
+        <h2>Developer access is ready</h2>
+        <p class="sub">Copy your API key now. Then open the full Developer Console to manage your workspace.</p>
         <div class="secret-box"><input id="createdApiKey" readonly spellcheck="false"><button id="copyCreatedKey" type="button">Copy</button></div>
         <div class="warning"><b>Protect your secret.</b> Use an environment variable such as <code>FOURN_DEV_API_KEY</code> in your server application.</div>
         <button id="continueConsoleBtn" class="primary full" type="button">Open Developer Console <span>→</span></button>
@@ -92,40 +76,48 @@
     </section>
   </main>
 
-  <footer class="landing-footer"><span>© 4N DEV</span><span>AI APIs · Models · Projects · Builder · Deployments · Billing</span><span>API v1</span></footer>
+  <section class="landing-capabilities">
+    <div><span>01</span><b>AI Models</b><small>Stable API endpoints for chat, coding, image and embeddings.</small></div>
+    <div><span>02</span><b>Build & Deploy</b><small>Projects and Builder take you from idea to published application.</small></div>
+    <div><span>03</span><b>Usage & Billing</b><small>See credits, plans, orders and activity from one console.</small></div>
+  </section>
+  <footer class="landing-footer"><span>© 4N DEV</span><span>AI infrastructure · Developer platform · API v1</span><span>Core Online</span></footer>
 </section>
-
 
 <section id="consoleScreen" class="hidden">
 <header class="topbar">
-  <div class="top-left"><button id="mobileNav" class="mobile-nav" type="button" aria-label="Open navigation">☰</button><a class="brand" href="#" id="brandHome"><span class="brand-logo">4N</span><span><b>4N DEV</b><small>Developer Platform</small></span></a></div>
+  <div class="top-left"><button id="mobileNav" class="mobile-nav" type="button" aria-label="Open navigation">☰</button><a class="brand" href="#" id="brandHome"><span class="brand-logo">4N</span><span><b>4N DEV</b><small>Developer Platform</small></span></a><span class="top-context">Developer Console</span></div>
   <div class="top-right"><span class="env"><i></i> Production</span><span id="planBadge" class="top-pill">FREE</span><span id="creditBadge" class="credit-pill">— credits</span><button id="logoutBtn" class="top-button" type="button">Disconnect</button></div>
 </header>
 
 <div class="platform">
 <aside id="sidebar" class="sidebar">
-  <div class="workspace"><div class="avatar">4N</div><div><b id="workspaceName">Developer</b><small>4N DEV workspace</small></div><span>⌄</span></div>
-  <div class="nav-label">BUILD</div>
+  <div class="workspace"><div class="avatar">4N</div><div><b id="workspaceName">Developer</b><small>Developer workspace</small></div><span class="workspace-dot"></span></div>
+  <div class="nav-label">WORKSPACE</div>
   <button class="nav active" data-page="overview"><span>⌂</span>Overview</button>
-  <button class="nav" data-page="models"><span>✦</span>Models</button>
+  <button class="nav" data-page="models"><span>✦</span>AI Models</button>
   <button class="nav" data-page="playground"><span>◈</span>Playground</button>
   <button class="nav" data-page="apiKeys"><span>⌁</span>API Keys</button>
   <button class="nav" data-page="projects"><span>□</span>Projects</button>
-  <button class="nav" data-page="builder"><span>◇</span>Builder <i class="new-badge">AI</i></button>
+  <button class="nav" data-page="builder"><span>◇</span>AI Builder <i class="new-badge">AI</i></button>
   <button class="nav" data-page="deployments"><span>↗</span>Deployments</button>
-  <div class="nav-label">OPERATE</div>
+  <div class="nav-label">USAGE & BILLING</div>
   <button class="nav" data-page="usage"><span>◌</span>Usage</button>
-  <button class="nav" data-page="billing"><span>◈</span>Billing</button>
+  <button class="nav" data-page="billing"><span>◈</span>Billing & Plans</button>
   <div class="nav-label">RESOURCES</div>
   <button class="nav" data-page="docs"><span>▤</span>Documentation</button>
-  <button class="nav" data-page="settings"><span>⚙</span>Settings</button>
-  <div class="sidebar-bottom"><div class="online"><i></i><span>4N DEV Core</span><b>Online</b></div><div class="version">API v1 · Developer Platform</div></div>
+  <button class="nav" data-page="support"><span>?</span>Support</button>
+  <button class="nav" data-page="status"><span>●</span>System Status</button>
+  <div class="nav-label">ACCOUNT</div>
+  <button class="nav" data-page="settings"><span>⚙</span>Settings & Security</button>
+  <div class="sidebar-bottom"><div class="online"><i></i><span>4N DEV Core</span><b>Operational</b></div><div class="version">API v1 · Developer Platform</div></div>
 </aside>
+
 <main id="main"></main>
 </div>
 </section>
 
-<script src="/frontend/onboarding.js?v=20261007-05" defer></script>
-<script src="/frontend/app.js?v=20261007-05" defer></script>
+<script src="/frontend/onboarding.js?v=20261007-06" defer></script>
+<script src="/frontend/app.js?v=20261007-06" defer></script>
 </body>
 </html>
