@@ -86,6 +86,27 @@
       }
     }
 
+    const copyButton = document.getElementById("copyCreatedKey");
+    copyButton?.addEventListener("click", async event => {
+      event.preventDefault();
+      const value = document.getElementById("createdApiKey")?.value || "";
+      const status = document.getElementById("copyStatus");
+      try {
+        await navigator.clipboard.writeText(value);
+        if (status) status.textContent = "API key copied to clipboard.";
+      } catch {
+        const input = document.getElementById("createdApiKey");
+        input?.focus();
+        input?.select();
+        if (status) status.textContent = "Copy blocked. Press and hold the key to copy it manually.";
+      }
+    });
+
+    document.getElementById("continueConsoleBtn")?.addEventListener("click", event => {
+      event.preventDefault();
+      window.__4nOpenConsole?.();
+    });
+
     button.addEventListener("click", event => {
       event.preventDefault();
       createKey();
