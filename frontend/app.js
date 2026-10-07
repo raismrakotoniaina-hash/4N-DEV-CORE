@@ -76,88 +76,10 @@ function showOnboarding(message="") {
 }
 
 function focusOnboarding() {
-  $("#onboardingCard")?.scrollIntoView({behavior:"smooth", block:"center"});
+  const target = $("#platformAccess");
+  target?.scrollIntoView({behavior:"smooth", block:"center"});
   setTimeout(() => $("#developerName")?.focus(), 450);
 }
-
-async function createDeveloperKey(event) {
-  event?.preventDefault();
-  const input = $("#developerName");
-  const button = $("#createKeyBtn");
-  const error = $("#createKeyError");
-  const name = input?.value.trim() || "";
-
-  if (error) {
-    error.textContent = "";
-    error.classList.add("hidden");
-  }
-
-  if (!name) {
-    if (error) {
-      error.textContent = "Developer or company name is required.";
-      error.classList.remove("hidden");
-    }
-    input?.focus();
-    return false;
-  }
-
-  setButton(button, true, "Creating API key…", "Create API key");
-
-  try {
-    const data = await api("/v1/keys/create", {
-      method:"POST",
-      body:JSON.stringify({name}),
-      timeout:15000
-    });
-
-    if (!data.api_key) {
-      const missing = new Error("The Core API did not return an API key.");
-      missing.status = 502;
-      throw missing;
-    }
-
-    key = data.api_key;
-    sessionStorage.setItem("4ndev_new_api_key", key);
-    $("#createdApiKey").value = key;
-    $("#createKeyStep").classList.add("hidden");
-    $("#keyCreatedStep").classList.remove("hidden");
-    $("#copyStatus").textContent = "Key created successfully.";
-    toast("Developer API key created.", "success");
-  } catch (error) {
-    console.error("4N DEV onboarding error", error);
-
-    let message = error.message || "Unable to create API key.";
-
-    if (error.status === 503 && error.data?.code === "DATABASE_NOT_CONFIGURED") {
-      message = "Developer key creation is temporarily unavailable. 4N DEV needs its dedicated PostgreSQL database before it can create a persistent API key.";
-    } else if (error.status === 429) {
-      message = "Too many key-creation attempts. Please wait a few minutes and try again.";
-    } else if (error.status === 404) {
-      message = "The onboarding API route is not available on this deployment. Please redeploy the latest 4N DEV Core version.";
-    } else if (error.status === 401) {
-      message = "This deployment is still serving an older onboarding version. Please redeploy the latest 4N DEV Core version.";
-    } else if (/fetch/i.test(message) || error.name === "TypeError") {
-      message = "The 4N DEV Core API could not be reached. Check the deployment and try again.";
-    }
-
-    const errorBox = $("#createKeyError");
-    if (errorBox) {
-      errorBox.textContent = message;
-      errorBox.classList.remove("hidden");
-    }
-    toast(message, "error");
-  } finally {
-    setButton(button, false, "", "Create API key");
-  }
-
-  return false;
-}
-
-
-window.__4nCreateKeyNow = createDeveloperKey;
-window.__4nSetApiKey = function (value) {
-  key = String(value || "");
-};
 
 async function copyText(value) {
   try {
@@ -185,20 +107,19 @@ async function copyCreatedKey() {
 }
 
 function continueToConsole() {
-  if (!key) key = window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";
-  if (!key) return toast("No API key is available yet.", "error");
-  localStorage.setItem("4ndev_api_key", key);
-  sessionStorage.removeItem("4ndev_new_api_key");
-  $("#onboardingScreen").classList.add("hidden");
-  $("#consoleScreen").classList.remove("hidden");
-  showConsole();
+  const storedKey = localStorage.getItem("4ndev_api_key") || "";
+  if (!storedKey) {
+    toast("Create your developer workspace first.", "error");
+    return;
+  }
+  key = storedKey;
+  window.__4nOpenConsole?.();
 }
 
 function logoutDeveloper() {
   key = "";
   me = null;
   localStorage.removeItem("4ndev_api_key");
-  sessionStorage.removeItem("4ndev_new_api_key");
   showOnboarding();
   toast("Disconnected from this device.");
 }
@@ -215,13 +136,19 @@ async function refreshMe() {
 
 function showConsole() {
   show("overview");
-  refreshMe().catch(error => {
+  void refreshMe().catch(error => {
     console.error("4N DEV console refresh:", error);
     toast("Console opened. Account details could not be refreshed yet.", "error");
   });
 }
 
 window.__4nOpenConsole = function () {
+  const storedKey = localStorage.getItem("4ndev_api_key") || "";
+  if (!storedKey) {
+    showOnboarding();
+    return;
+  }
+  key = storedKey;
   $("#onboardingScreen")?.classList.add("hidden");
   $("#consoleScreen")?.classList.remove("hidden");
   showConsole();
@@ -673,9 +600,7 @@ async function startOrder(planId) {
 }
 
 function init() {
-  const form = $("#createKeyForm");
-
-  // Onboarding owns the copy and console navigation handlers to avoid duplicate click events.
+  // Onboarding owns key creation, copy and console-entry controls.
   $("#logoutBtn")?.addEventListener("click", logoutDeveloper);
   $("#mobileNav")?.addEventListener("click", () => $("#sidebar")?.classList.toggle("open"));
   $("#brandHome")?.addEventListener("click", event => { event.preventDefault(); if (key) show("overview"); });
@@ -686,7 +611,6 @@ function init() {
     toast("Create a key first to open the Developer Console.");
   });
   $("#landingBrand")?.addEventListener("click", event => { event.preventDefault(); focusOnboarding(); });
-  $("#developerName")?.addEventListener("keydown", event => { if (event.key === "Enter") form?.requestSubmit(); });
   $$(".nav").forEach(nav => nav.addEventListener("click", () => show(nav.dataset.page)));
 
   if (key) showConsole();
