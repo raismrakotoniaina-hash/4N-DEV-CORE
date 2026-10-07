@@ -8,11 +8,11 @@
     const overview = document.getElementById("platformOverview");
     const createStep = document.getElementById("createKeyStep");
     const backButton = document.getElementById("backToPlatformBtn");
-    const startButtons = [document.getElementById("startBuildingBtn"), document.getElementById("startAccessBtn")].filter(Boolean);
+    const startButtons = [document.getElementById("startBuildingBtn"), document.getElementById("startAccessBtn")].filter(Boolean);\n    const topConsoleButton = document.getElementById("openConsoleTopBtn");\n    const copyButton = document.getElementById("copyCreatedKey");
 
-    if (!button || !input) return;
+    if (!button || !input) return;\n\n    async function copyCreatedKeyNow() {\n      const created = document.getElementById("createdApiKey");\n      const status = document.getElementById("copyStatus");\n      const value = created?.value || "";\n      if (!value) { if (status) status.textContent = "No API key is available."; return; }\n      let copied = false;\n      try {\n        if (navigator.clipboard && window.isSecureContext) {\n          await navigator.clipboard.writeText(value);\n          copied = true;\n        }\n      } catch (_) {}\n      if (!copied) {\n        const area = document.createElement("textarea");\n        area.value = value;\n        area.setAttribute("readonly", "");\n        area.style.position = "fixed";\n        area.style.left = "-9999px";\n        document.body.appendChild(area);\n        area.focus();\n        area.select();\n        area.setSelectionRange(0, area.value.length);\n        try { copied = document.execCommand("copy"); } catch (_) { copied = false; }\n        area.remove();\n      }\n      if (status) status.textContent = copied ? "API key copied to clipboard." : "Copy failed. Long-press the key to copy it manually.";\n    }\n\n    copyButton?.addEventListener("click", copyCreatedKeyNow);
 
-    const continueButton = document.getElementById("continueConsoleBtn");
+    topConsoleButton?.addEventListener("click", function () {\n      const existingKey = localStorage.getItem("4ndev_api_key") || window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";\n      if (existingKey) {\n        localStorage.setItem("4ndev_api_key", existingKey);\n        sessionStorage.removeItem("4ndev_new_api_key");\n        window.location.assign("/console");\n        return;\n      }\n      overview?.classList.add("hidden");\n      createStep?.classList.remove("hidden");\n      input.focus();\n      document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth", block:"center"});\n    });\n\n    const continueButton = document.getElementById("continueConsoleBtn");
     continueButton?.addEventListener("click", function () {
       const createdKey = window.__4nApiKey || sessionStorage.getItem("4ndev_new_api_key") || "";
       if (!createdKey) {
