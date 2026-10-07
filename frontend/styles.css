@@ -14,3 +14,25 @@
 .preview-grid{display:grid;grid-template-columns:repeat(3,1fr)}.preview-grid>div{padding:14px;border-right:1px solid var(--line)}.preview-grid>div:last-child{border-right:0}.preview-grid small{display:block;font-size:7px;letter-spacing:1px;color:#536078;font-weight:800}.preview-grid strong{display:block;font-size:10px;margin:8px 0 4px}.preview-grid span{display:block;color:#69768d;font-size:7px;line-height:1.45}
 .access-list{display:grid;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:20px 0 14px}.access-list>div{display:flex;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line);background:#0b101d}.access-list>div:last-child{border-bottom:0}.access-list>b,.access-list>div>b{flex:0 0 20px;color:var(--purple2);font-size:8px;padding-top:2px}.access-list span{display:grid;gap:3px}.access-list strong{font-size:9px}.access-list small{font-size:8px;color:#68758c;line-height:1.4}
 @media(max-width:800px){.platform-preview{margin-top:22px}.preview-grid{grid-template-columns:1fr}.preview-grid>div{border-right:0;border-bottom:1px solid var(--line)}.preview-grid>div:last-child{border-bottom:0}.onboarding-card{padding:23px}.access-list{margin-top:16px}}
+
+
+/* Mobile onboarding layout fixes */
+@media(max-width:800px){
+  .landing-nav{min-height:64px;height:auto;padding:10px 16px;gap:10px}
+  .landing-actions{gap:8px;min-width:0}
+  .landing-actions .nav-link{display:none}
+  .landing-actions .top-console-btn{padding:8px 10px;font-size:9px;white-space:nowrap}
+  .hero-copy h1{line-height:1.04;letter-spacing:-2px}
+  .hero-copy>p{line-height:1.75}
+  .onboarding-card{width:100%;overflow:hidden}
+  .onboarding-card h2,.onboarding-card .sub,.fine{overflow-wrap:anywhere}
+}
+@media(max-width:500px){
+  .landing-nav{padding:9px 12px}
+  .landing-nav .brand{flex:0 0 auto}
+  .landing-actions .top-console-btn{font-size:8px;padding:8px 9px}
+  .hero-copy h1{font-size:39px;line-height:1.06}
+  .onboarding-card{padding:20px}
+  .card-top{gap:8px;align-items:flex-start}
+  .lock{white-space:nowrap}
+}
