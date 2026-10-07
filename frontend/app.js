@@ -155,6 +155,9 @@ async function createDeveloperKey(event) {
 
 
 window.__4nCreateKeyNow = createDeveloperKey;
+window.__4nSetApiKey = function (value) {
+  key = String(value || "");
+};
 
 async function copyText(value) {
   try {
@@ -213,9 +216,8 @@ async function refreshMe() {
 function showConsole() {
   show("overview");
   refreshMe().catch(error => {
-    console.error(error);
-    logoutDeveloper();
-    showOnboarding("This API key is no longer valid. Create a new developer key.");
+    console.error("4N DEV console refresh:", error);
+    toast("Console opened. Account details could not be refreshed yet.", "error");
   });
 }
 
