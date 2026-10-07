@@ -705,8 +705,6 @@ function init() {
   $("#logoutBtn")?.addEventListener("click", logoutDeveloper);
   $("#mobileNav")?.addEventListener("click", () => $("#sidebar")?.classList.toggle("open"));
   $("#brandHome")?.addEventListener("click", event => { event.preventDefault(); if (key) show("overview"); });
-  $("#startBuildingBtn")?.addEventListener("click", focusOnboarding);
-  $("#startAccessBtn")?.addEventListener("click", focusOnboarding);
   $("#landingDocsBtn")?.addEventListener("click", () => {
     document.getElementById("platformAccess")?.scrollIntoView({behavior:"smooth",block:"center"});
   });
