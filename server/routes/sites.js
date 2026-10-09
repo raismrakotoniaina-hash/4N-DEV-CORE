@@ -52,4 +52,28 @@ router.use("/:slug", async (req, res, next) => {
   }
 });
 
+const customDomainRouter = express.Router();
+
+customDomainRouter.use(async (req, res, next) => {
+  try {
+    const hostname = String(req.hostname || "").toLowerCase().replace(/\\.$/, "");
+    const deployment = await (await import("../domains.js")).getPublicDomainDeployment(hostname);
+    if (!deployment) return next();
+
+    const requestedPath = req.path.replace(/^\\/+/, "") || "index.html";
+    const file = findDeploymentFile(deployment, requestedPath);
+    if (!file) return res.status(404).type("text/plain").send("Published file not found");
+
+    const extension = file.path.includes(".") ? file.path.split(".").pop().toLowerCase() : "";
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.type(contentTypes[extension] || "application/octet-stream");
+    if (file.encoding === "base64") return res.send(Buffer.from(file.content, "base64"));
+    return res.send(file.content);
+  } catch (error) {
+    next(error);
+  }
+});
+
+export { customDomainRouter };
+
 export default router;
