@@ -137,7 +137,11 @@ export async function deleteDeployment(apiKeyId, deploymentId) {
   const state = await readStore();
   const exists = state.deployments.some(d => d.id === deploymentId && d.apiKeyId === apiKeyId);
   if (!exists) return false;
-  await updateStore(current => ({...current, deployments: current.deployments.filter(d => !(d.id === deploymentId && d.apiKeyId === apiKeyId))}));
+  await updateStore(current => ({
+    ...current,
+    deployments: current.deployments.filter(d => !(d.id === deploymentId && d.apiKeyId === apiKeyId)),
+    customDomains: (current.customDomains || []).filter(domain => domain.deploymentId !== deploymentId)
+  }));
   return true;
 }
 
