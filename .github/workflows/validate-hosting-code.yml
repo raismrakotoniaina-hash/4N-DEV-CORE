@@ -19,7 +19,10 @@ jobs:
           node-version: 24
 
       - name: Check JavaScript syntax
-        run: find server -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+        run: |
+          set -eu
+          find server -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --check frontend/app.js
 
       - name: Check shell script syntax
         run: |
