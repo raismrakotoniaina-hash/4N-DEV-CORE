@@ -54,7 +54,8 @@ router.post("/:domainId/verify", async (req, res, next) => {
   try {
     const result = await verifyDomain(req.apiKey.id, req.params.domainId);
     if (result.error) return res.status(result.code === "DNS_TXT_NOT_FOUND" ? 409 : 400).json({ success: false, error: result.error, code: result.code });
-    const { verificationToken, ...safeDomain } = result.domain;\n    res.json({ success: true, domain: safeDomain, note: "DNS ownership is verified. HTTPS must still be configured for this hostname before production use." });
+    const { verificationToken, ...safeDomain } = result.domain;
+    res.json({ success: true, domain: safeDomain, note: "DNS ownership is verified. HTTPS must still be configured for this hostname before production use." });
   } catch (error) { next(error); }
 });
 
