@@ -128,7 +128,7 @@
   }
   async function billingPage() {
     var results=await Promise.all([api('/v1/billing/plans'),api('/v1/billing/providers'),api('/v1/billing/orders')]);
-    planList=results[0].plans||[];providerList=(results[1].providers||[]).filter(function(p){return p.status==='available'||p.configured;});
+    planList=results[0].plans||[];providerList=(results[1].providers||[]).filter(function(p){return p.configured===true;});
     var orders=results[2].orders||[];
     var currency=localStorage.getItem('4ndev_currency')||'USD';
     return head('<label class="currency-label" for="currencySelect">Currency</label><select class="field currency-select" id="currencySelect"><option value="USD" '+(currency==='USD'?'selected':'')+'>USD · US Dollar</option><option value="EUR" '+(currency==='EUR'?'selected':'')+'>EUR · Euro</option><option value="MGA" '+(currency==='MGA'?'selected':'')+'>MGA · Ariary</option></select>')+
@@ -232,6 +232,9 @@
     };
   }
   async function buyPlan(planId,currency) {
+    var providerResponse=await api('/v1/billing/providers');
+    var available=(providerResponse.providers||[]).filter(function(x){return x.configured===true&&(x.currencies||[]).indexOf(currency)>=0;});
+    if(!available.length)throw new Error('No configured payment provider supports '+currency+' yet. No order was created.');
     var p=planList.find(function(x){return x.id===planId;});
     if(!p){var d=await api('/v1/billing/plans');p=(d.plans||[]).find(function(x){return x.id===planId;});}
     if(!p)throw new Error('Package not found.');
@@ -239,9 +242,6 @@
     if(amount==null)throw new Error('No price configured for '+currency+'.');
     if(!window.confirm('Create a one-time order for '+p.name+' · '+money(amount,currency)+'?'))return;
     var orderResult=await api('/v1/billing/orders',{method:'POST',body:JSON.stringify({planId:planId,currency:currency})});
-    var providers=await api('/v1/billing/providers');
-    var available=(providers.providers||[]).filter(function(x){return x.configured===true||x.status==='available';});
-    if(!available.length){toast('Order created, but no payment provider is available.',true);render();return;}
     showCheckout(orderResult.order,available);
   }
   function showCheckout(order,providers) {
