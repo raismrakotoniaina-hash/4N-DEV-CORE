@@ -163,6 +163,24 @@ export async function initializeDatabase() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_deployments_slug
       ON deployments(slug);
 
+    CREATE TABLE IF NOT EXISTS custom_domains (
+      id UUID PRIMARY KEY,
+      api_key_id TEXT NOT NULL,
+      deployment_id UUID NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+      domain TEXT NOT NULL UNIQUE,
+      verification_token TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending_verification',
+      verified_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_custom_domains_api_key
+      ON custom_domains(api_key_id);
+
+    CREATE INDEX IF NOT EXISTS idx_custom_domains_deployment
+      ON custom_domains(deployment_id);
+
     CREATE TABLE IF NOT EXISTS billing_orders (
       id UUID PRIMARY KEY,
       api_key_id TEXT NOT NULL,
