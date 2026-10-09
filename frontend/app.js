@@ -49,7 +49,8 @@
     return data;
   }
   function button(label,action,kind) {
-    return '<button class="btn '+(kind||'')+'" data-action="'+esc(action)+'">'+esc(label)+'</button>';
+    var attr=titles[action]?'data-page="'+esc(action)+'"':'data-action="'+esc(action)+'"';
+    return '<button class="btn '+(kind||'')+'" '+attr+'>'+esc(label)+'</button>';
   }
   function head(actions) {
     return '<div class="page-head"><div><span class="eyebrow">4N DEV CORE / DEVELOPER CONSOLE</span><h1>'+esc(titles[page][0])+'</h1><p class="muted">'+esc(titles[page][1])+'</p></div><div class="page-actions">'+(actions||'')+'</div></div>';
@@ -152,6 +153,9 @@
     var d=await api(path);
     return head(button('Refresh','refresh',''))+'<div class="card"><div class="card-head"><div><h3>'+esc(label)+'</h3><p class="muted">Data returned by the Core API.</p></div><span class="pill green">Connected</span></div><pre class="code-sample">'+esc(JSON.stringify(d,null,2))+'</pre></div>';
   }
+  function builderPage() {
+    return head()+'<div class="grid grid2"><div class="card"><span class="eyebrow">AI PLANNER</span><h3>Plan an application</h3><p class="muted">Describe the app you want to build. The planner returns a structured plan using your available Core credits.</p><label class="field-label" for="builderPrompt">Application description</label><textarea id="builderPrompt" class="field" rows="7" maxlength="12000" placeholder="Create a responsive shop website with product cards, cart and contact page…"></textarea><div class="form-foot"><span class="muted tiny">Planner cost is defined by the Core credit policy.</span><button class="btn primary" id="runPlanner">Generate plan</button></div></div><div class="card"><h3>Planner output</h3><p class="muted">Your generated plan will appear here.</p><div id="plannerResult" class="planner-result"><div class="empty compact"><p>Enter a description and run the planner to begin.</p></div></div></div></div>';
+  }
   function docsPage() {
     var base=location.origin;
     return head()+'<div class="grid grid2"><div class="card"><div class="icon">⌁</div><h3>1. Authentication</h3><p class="muted">Keep the secret in your backend environment and send it with each request.</p><pre class="code-sample">Authorization: Bearer 4ndev_sk_…</pre>'+button('Copy header','copy-auth','')+'</div><div class="card"><div class="icon">⌘</div><h3>2. API base URL</h3><pre class="code-sample">'+esc(base)+'/v1/</pre>'+button('Copy API base URL','copy-base','')+'</div><div class="card"><h3>Available endpoints</h3>'+[['Chat','POST /v1/chat'],['Coding','POST /v1/coding'],['Image','POST /v1/image'],['Embeddings','POST /v1/embeddings'],['Credits','GET /v1/credits'],['Usage','GET /v1/usage'],['Projects','/v1/projects'],['Builder','/v1/builder'],['Deployments','/v1/hosting/deployments']].map(function(x){return '<div class="activity"><b>'+x[0]+'</b><code>'+x[1]+'</code></div>';}).join('')+'</div><div class="card"><h3>Security checklist</h3><ul class="check-list"><li>Never embed production keys in browser JavaScript.</li><li>Use HTTPS in production.</li><li>Rotate a key immediately if it is exposed.</li><li>Keep usage and credit limits in your own backend.</li></ul></div></div>';
@@ -173,10 +177,11 @@
       else if(page==='plans')main.innerHTML=await plansPage();
       else if(page==='projects')main.innerHTML=await projectsPage();
       else if(page==='deployments')main.innerHTML=await deploymentsPage();
-      else if(page==='builder')main.innerHTML=await genericRaw('AI Builder','/v1/builder');
+      else if(page==='builder')main.innerHTML=builderPage();
       else if(page==='docs')main.innerHTML=docsPage();
       else if(page==='settings')main.innerHTML=settingsPage();
       bindPage();
+      if(page==='builder'){var run=document.getElementById('runPlanner');if(run)run.onclick=runBuilderPlanner;}
       if(page==='dashboard')loadRecentActivity();
       var currencySelect=document.getElementById('currencySelect');
       if(currencySelect)currencySelect.onchange=function(){localStorage.setItem('4ndev_currency',currencySelect.value);render();};
@@ -191,6 +196,12 @@
       var d=await api('/v1/usage?limit=5');var arr=d.usage||[];
       el.innerHTML=arr.length?arr.slice(0,5).map(function(r){var u=r.usage||{};return '<div class="activity"><div><b>'+esc(r.endpoint||r.path||'API request')+'</b><small>'+esc(date(r.createdAt||r.created_at||r.timestamp))+'</small></div><div class="activity-right"><code>'+esc(u.credits_used==null?'—':u.credits_used)+' credits</code></div></div>';}).join(''):'<div class="empty compact"><p>No usage recorded yet. Your requests will appear here.</p></div>';
     } catch(e) { el.innerHTML='<p class="muted">Usage history is temporarily unavailable.</p>'; }
+  }
+  async function runBuilderPlanner() {
+    var prompt=document.getElementById('builderPrompt').value.trim();var output=document.getElementById('plannerResult');var btn=document.getElementById('runPlanner');
+    if(!prompt){toast('Describe the application first.',true);return;}
+    btn.disabled=true;btn.textContent='Planning…';output.innerHTML='<div class="loading">Generating plan…</div>';
+    try{var result=await api('/v1/builder/plan',{method:'POST',body:JSON.stringify({prompt:prompt})});output.innerHTML='<div class="planner-meta"><span class="pill green">Plan ready</span><span class="muted">'+esc(result.model||'Core planner')+'</span></div><pre class="code-sample">'+esc(JSON.stringify(result.plan||result,null,2))+'</pre><p class="muted tiny">Credits used: '+esc(result.credits_used==null?'—':result.credits_used)+' · Remaining: '+esc(result.credits_remaining==null?'—':result.credits_remaining)+'</p>';await loadMe();}catch(e){output.innerHTML='<div class="notice error-notice">'+esc(e.message)+'</div>';}finally{btn.disabled=false;btn.textContent='Generate plan';}
   }
   async function toggleKey(id,active) {
     var message=active?'Revoking this key will disconnect the current console if it is the key you are using. Continue?':'Activate this key?';
@@ -265,7 +276,7 @@
     document.body.appendChild(modal);document.getElementById('cancelProject').onclick=function(){modal.remove();};
     document.getElementById('saveProject').onclick=async function(){var name=document.getElementById('projectName').value.trim();if(!name){toast('Project name is required.',true);return;}var btn=this;btn.disabled=true;try{await api('/v1/projects',{method:'POST',body:JSON.stringify({name:name,description:document.getElementById('projectDescription').value.trim()})});modal.remove();toast('Project created.');render();}catch(e){btn.disabled=false;toast(e.message,true);}};
   }
-  async function loadMe() {var d=await api('/v1/me');me=d.developer||{};document.getElementById('developerName').textContent=me.name||'Developer';document.getElementById('planPill').textContent=String(me.plan||'free').toUpperCase();document.getElementById('creditPill').textContent=String(me.credits==null?'—':me.credits)+' credits';}
+  async function loadMe() {var d=await api('/v1/me');me=d.developer||{};var nameEl=document.getElementById('developerName');var planEl=document.getElementById('planPill');var creditEl=document.getElementById('creditPill');if(nameEl)nameEl.textContent=me.name||'Developer';if(planEl)planEl.textContent=String(me.plan||'free').toUpperCase();if(creditEl)creditEl.textContent=String(me.credits==null?'—':me.credits)+' credits';}
   function login() {
     app.innerHTML='<div class="login-screen"><div class="login-card"><div class="logo">4N</div><span class="eyebrow">4N DEV CORE</span><h1>Developer Console</h1><p class="muted">Connect an existing <code>4ndev_sk</code> key to manage your Core workspace.</p><label class="field-label" for="loginKey">Secret API key</label><input id="loginKey" class="field" placeholder="4ndev_sk_…" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="muted tiny">Your key is sent only as a Bearer token to the Core API.</p><button class="btn primary full" id="loginBtn">Connect to Core</button><p class="login-help">Don't have a key? Use the API key onboarding flow provided by your Core administrator.</p><div id="loginError" class="login-error" hidden></div></div></div>';
     var field=document.getElementById('loginKey');field.value=key;
