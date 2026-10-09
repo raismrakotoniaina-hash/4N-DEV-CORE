@@ -60,7 +60,7 @@ export async function createDomain(apiKeyId, deploymentId, inputDomain) {
 export async function listDomains(apiKeyId) {
   if (isDatabaseConfigured()) {
     const result = await query("SELECT * FROM custom_domains WHERE api_key_id = $1 ORDER BY created_at DESC", [apiKeyId]);
-    return result.rows.map(mapRow).map(({ verificationToken, ...safe }) => ({ ...safe, verificationToken: verificationToken }));
+    return result.rows.map(mapRow).map(({ verificationToken, ...safe }) => safe);
   }
   const state = await readStore();
   return state.customDomains.filter(item => item.apiKeyId === apiKeyId).map(mapLocal);
