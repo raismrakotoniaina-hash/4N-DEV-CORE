@@ -22,7 +22,7 @@ import billingRouter from "./routes/billing.js";
 import usageRouter from "./routes/usage.js";
 import hostingRouter from "./routes/hosting.js";
 import buildRouter from "./routes/build.js";
-import sitesRouter from "./routes/sites.js";
+import sitesRouter, { customDomainRouter } from "./routes/sites.js";
 import { registerKeyOnboarding } from "./routes/keyOnboarding.js";
 import { listApiKeys, setApiKeyActive } from "./apiKeys.js";
 import { apiRateLimit } from "./middleware/rateLimit.js";
@@ -291,7 +291,7 @@ app.use("/v1", creditPolicyRouter);
 app.use("/v1/projects", projectsRouter);
 app.use("/v1", filesRouter);
 app.use("/v1", builderRouter);
-app.use("/v1/hosting", hostingRouter);
+app.use("/v1/hosting", hostingRouter);\napp.use("/v1/hosting/domains", (await import("./routes/domains.js")).default);
 app.use("/v1", buildRouter);
 
 app.use((err, req, res, _next) => {
