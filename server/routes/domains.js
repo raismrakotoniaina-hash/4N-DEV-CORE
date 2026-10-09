@@ -26,9 +26,16 @@ router.post("/", async (req, res, next) => {
         id: domain.id, domain: domain.domain, deploymentId: domain.deploymentId,
         status: domain.status, createdAt: domain.createdAt,
         dns: {
-          type: "TXT",
-          name: "_4ndev-verify." + domain.domain,
-          value: domain.verificationToken
+          verification: {
+            type: "TXT",
+            name: "_4ndev-verify." + domain.domain,
+            value: domain.verificationToken
+          },
+          routing: process.env.PUBLIC_HOSTING_IP ? {
+            type: "A",
+            name: domain.domain,
+            value: process.env.PUBLIC_HOSTING_IP
+          } : null
         },
         nextStep: "Add the TXT record at your DNS provider, wait for DNS propagation, then POST /v1/hosting/domains/" + domain.id + "/verify."
       }
