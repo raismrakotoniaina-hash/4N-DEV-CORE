@@ -21,6 +21,7 @@ import builderRouter from "./routes/builder.js";
 import billingRouter from "./routes/billing.js";
 import usageRouter from "./routes/usage.js";
 import hostingRouter from "./routes/hosting.js";
+import domainsRouter from "./routes/domains.js";
 import buildRouter from "./routes/build.js";
 import sitesRouter, { customDomainRouter } from "./routes/sites.js";
 import { registerKeyOnboarding } from "./routes/keyOnboarding.js";
@@ -50,6 +51,9 @@ app.use("/frontend", express.static(FRONTEND_DIR, {
     }
   }
 }));
+
+// Resolve verified customer domains before serving the Core console root.
+app.use(customDomainRouter);
 
 // Public developer console. Keep this route separate from /health so the root URL
 // always opens the frontend and never the API health payload.
@@ -291,7 +295,8 @@ app.use("/v1", creditPolicyRouter);
 app.use("/v1/projects", projectsRouter);
 app.use("/v1", filesRouter);
 app.use("/v1", builderRouter);
-app.use("/v1/hosting", hostingRouter);\napp.use("/v1/hosting/domains", (await import("./routes/domains.js")).default);
+app.use("/v1/hosting", hostingRouter);
+app.use("/v1/hosting/domains", domainsRouter);
 app.use("/v1", buildRouter);
 
 app.use((err, req, res, _next) => {
