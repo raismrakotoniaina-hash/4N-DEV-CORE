@@ -13,6 +13,7 @@ const DEFAULT_STATE = {
   usageRecords: [],
   builds: [],
   deployments: [],
+  customDomains: [],
   billingOrders: [],
   billingPayments: []
 };
@@ -39,6 +40,7 @@ async function loadState() {
       usageRecords: Array.isArray(parsed.usageRecords) ? parsed.usageRecords : [],
       builds: Array.isArray(parsed.builds) ? parsed.builds : [],
       deployments: Array.isArray(parsed.deployments) ? parsed.deployments : [],
+      customDomains: Array.isArray(parsed.customDomains) ? parsed.customDomains : [],
       billingOrders: Array.isArray(parsed.billingOrders) ? parsed.billingOrders : [],
       billingPayments: Array.isArray(parsed.billingPayments) ? parsed.billingPayments : []
     };
