@@ -17,22 +17,40 @@ RETENTION_DAYS="${RETENTION_DAYS:-7}"
 mkdir -p "$BACKUP_DIR"
 
 if ! docker compose ps --services --status running | grep -qx "postgres"; then
-  echo "ERROR: PostgreSQL container is not running."
+  echo "ERROR: PostgreSQL container is not running." >&2
   exit 1
 fi
 
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+SQL_FILE="$BACKUP_DIR/.4ncore-$TIMESTAMP.sql.tmp"
 BACKUP_FILE="$BACKUP_DIR/4ncore-$TIMESTAMP.sql.gz"
+trap 'rm -f "$SQL_FILE"' EXIT HUP INT TERM
 
 echo "Creating PostgreSQL backup..."
 
-docker compose exec -T postgres \
-  pg_dump -U 4ncore -d 4ncore \
-  | gzip > "$BACKUP_FILE"
+# Avoid a pipeline that can hide pg_dump failures when running under POSIX sh.
+if ! docker compose exec -T postgres pg_dump -U 4ncore -d 4ncore > "$SQL_FILE"; then
+  rm -f "$SQL_FILE" "$BACKUP_FILE"
+  echo "ERROR: pg_dump failed; no backup was retained." >&2
+  exit 1
+fi
+
+if [ ! -s "$SQL_FILE" ]; then
+  rm -f "$SQL_FILE" "$BACKUP_FILE"
+  echo "ERROR: pg_dump produced an empty file." >&2
+  exit 1
+fi
+
+if ! gzip -c "$SQL_FILE" > "$BACKUP_FILE"; then
+  rm -f "$BACKUP_FILE"
+  echo "ERROR: gzip failed; incomplete backup removed." >&2
+  exit 1
+fi
+rm -f "$SQL_FILE"
 
 if [ ! -s "$BACKUP_FILE" ]; then
   rm -f "$BACKUP_FILE"
-  echo "ERROR: backup file is empty."
+  echo "ERROR: compressed backup is empty." >&2
   exit 1
 fi
 
