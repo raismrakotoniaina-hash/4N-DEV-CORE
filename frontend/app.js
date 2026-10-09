@@ -2,6 +2,7 @@
 (function () {
   var app = document.getElementById('app');
   var key = localStorage.getItem('4ndev_api_key') || '';
+  var API_BASE = (localStorage.getItem('4ndev_api_base') || 'https://fourn-dev-core.onrender.com').replace(/\\/+$/, '');
   var page = 'dashboard';
   var me = {};
   var providerList = [];
@@ -43,7 +44,7 @@
     var headers={'Content-Type':'application/json'};
     if(key)headers.Authorization='Bearer '+key;
     options.headers=Object.assign(headers,options.headers||{});
-    var response=await fetch(path,options);
+    var response=await fetch(API_BASE+path,options);
     var data=await response.json().catch(function(){return {};});
     if(!response.ok)throw new Error(data.error||data.message||('Request failed ('+response.status+')'));
     return data;
