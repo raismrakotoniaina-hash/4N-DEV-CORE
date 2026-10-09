@@ -36,7 +36,7 @@ This document records repository evidence only; it does not claim that a VPS has
 
 ## Important boundaries
 
-- No VPS installation, DNS change, HTTPS issuance, scheduled backup, off-server backup, or Render migration is completed by this repository audit.
-- The existing local backup script is not itself a scheduled or off-site backup system.
+- No VPS installation, DNS change, HTTPS issuance, cron installation, off-server backup, or Render migration is completed by this repository audit.
+- A cron installer now exists, but it must be run on the VPS; an off-site provider still needs configuration.
 - Do not expose PostgreSQL or the Docker API to the public Internet.
 - Do not put live secrets in GitHub or share them in chat.
