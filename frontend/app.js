@@ -2,7 +2,7 @@
 (function () {
   var app = document.getElementById('app');
   var key = localStorage.getItem('4ndev_api_key') || '';
-  var API_BASE = (localStorage.getItem('4ndev_api_base') || 'https://fourn-dev-core.onrender.com').replace(/\\/+$/, '');
+  var API_BASE = (localStorage.getItem('4ndev_api_base') || 'https://fourn-dev-core.onrender.com').replace(/\/+$/, '');
   var page = 'dashboard';
   var me = {};
   var providerList = [];
