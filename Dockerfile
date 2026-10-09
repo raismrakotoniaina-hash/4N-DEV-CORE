@@ -9,7 +9,7 @@ COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
 COPY server ./server
-COPY .env.example ./.env.example
+COPY frontend ./frontend
 
 EXPOSE 3001
 
