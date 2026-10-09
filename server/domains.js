@@ -63,7 +63,7 @@ export async function listDomains(apiKeyId) {
     return result.rows.map(mapRow).map(({ verificationToken, ...safe }) => safe);
   }
   const state = await readStore();
-  return state.customDomains.filter(item => item.apiKeyId === apiKeyId).map(mapLocal);
+  return state.customDomains.filter(item => item.apiKeyId === apiKeyId).map(item => { const { verificationToken, ...safe } = mapLocal(item); return safe; });
 }
 
 export async function getDomain(apiKeyId, domainId) {
