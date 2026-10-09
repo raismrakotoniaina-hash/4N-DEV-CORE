@@ -44,6 +44,8 @@ router.use("/:slug", async (req, res, next) => {
 const customDomainRouter = express.Router();
 customDomainRouter.use(async (req, res, next) => {
   if (process.env.ENABLE_CUSTOM_DOMAINS !== "true") return next();
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (req.path.startsWith("/v1/") || req.path === "/health" || req.path.startsWith("/health/") || req.path.startsWith("/frontend/") || req.path === "/console" || req.path.startsWith("/sites/") || req.path.startsWith("/payment/")) return next();
   try {
     const hostname = String(req.hostname || "").toLowerCase().replace(/\.$/, "");
     const deployment = await getPublicDomainDeployment(hostname);
