@@ -1,0 +1,22 @@
+name: Validate hosting infrastructure code
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check JavaScript syntax
+        run: find server -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Check shell script syntax
+        run: for file in scripts/*.sh; do sh -n "$file"; done
